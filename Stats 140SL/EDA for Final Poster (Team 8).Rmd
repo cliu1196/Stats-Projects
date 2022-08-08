@@ -1,0 +1,274 @@
+---
+title: "EDA for Final Poster (Team 8)"
+author: 'Team Members: Joseph Gallegos, Ajay Kallepalli, Lyndon Liang, Charles Liu,
+  Anshuman Mahalley'
+date: "2/27/2021"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+
+# Questions to Answer:
+ 1. What is the issue or overal topic that interests you? [Issue (broad)]
+ 2. What is a specific research question that you want to investigate [Research Question (narrower)]
+ 3. What is the problem that makes your question worth investigating? Is this an actual problem or an assumed problem? [Underlying Problem(s)]
+ 4. Does your problem have social significance? [Social Significance]
+ 5. What is your proposal for addressing this problem? Is your proposal both arguable & feasible? [Proposal/Solution]
+ 
+# Answers to Questions:
+ 1. Data, demographics, and churn of credit card users
+ 2. Is there a way for banks to minimize their customer churn and if so what specific areas or demographics should the company focus on.
+ 3. Banks will from time to time have customers/clients leave their credit company for another credit company. The problem is trying to figure what are some causations/correlations that would make these customers/clients leave the credit company. Companies can then use this information to better focus their limited resources on clients that appear likely to churn and minimize churn rate (actual problem).
+ 4. There are many areas of social significance that may benefit from such an analysis. One example is the ability to identify underserved demographics that have high churn in order to help improve their relationship with credit.  In general this analysis would be useful in the areas of consumer debt, finance, and customs.
+ 5. We propose using the variables given to us in this dataset to possibly narrow down the reason(s) and/or probability of customers leaving a credit company. We will look into it by using statistical methods. This proposal is extremely wide ranging and does leave room to be argued, but it is an overall feasible solution.
+
+
+**Note:** 16.07% of customers churned in this data, with 1627 attrited customers and 8500 existing customers.
+
+
+
+# Loading Necessary Packages & Setting Working Directory
+```{r, message=FALSE, warning=FALSE}
+setwd(getwd())
+library(readr)
+library(tidyverse)
+library(DT)
+library(knitr)
+library(lubridate)
+library(ggthemes)
+library(tidytext)
+library(wordcloud)
+library(RColorBrewer)
+library(randomForest)
+```
+
+
+
+# Loading the Dataset
+## Credit Card Cancellation
+```{r, message=FALSE, warning=FALSE}
+bank <- read_csv("BankChurners.csv")[,-c(1,22,23)]
+```
+
+We are going to ignore the last 2 columns of the csv dataset since they are not relevant. They both use Naive Bayes Classifier, which is not what we need for our analysis.
+
+
+## Preliminary Analysis (Application)
+```{r}
+# Take an initial look at the data
+glimpse(bank)
+summary(bank)
+
+# Check for NA's
+bank %>%
+  summarise_all(funs(is.na(.) %>% sum()))
+```
+
+Good news is that we have no NA's to deal with.
+
+
+
+# Perform EDA using Plots and Tables
+## Dimension Reduction for "Income_Category"
+```{r}
+# Categorization of Incomes
+low_income <- c("Less than $40K")
+mid_income <- c("$40K - $60K", "$60K - $80K")
+high_income <- c("$80K - $120K", "$120K +")
+
+# Implement the categories for the economic statuses
+bank$Economic_Class <- ifelse(bank$Income_Category %in% low_income, 
+                              "Low Income",
+                              bank$Income_Category)
+bank$Economic_Class <- ifelse(bank$Income_Category %in% mid_income,
+                              "Mid Income",
+                              bank$Economic_Class)
+bank$Economic_Class <- ifelse(bank$Income_Category %in% high_income,
+                              "High Income",
+                              bank$Economic_Class)
+
+# Check
+unique(bank$Economic_Class)
+```
+
+I decided to determine that lower income status would be "Less than \$40K", middle income would be "\$40K - \$60K" & "\$60K - \$80K", and high income would be "\$80K - \$120K" & "\$120K +". I did this to simplify the process of determining people's Social Economic Status. Using this Dimension Reduction, we have to keep in mind that there will be an increase in bias and reduction in variance for our models.
+
+
+```{r}
+# Checking variables
+names(bank)
+```
+
+
+```{r, warning=FALSE, message=FALSE}
+# Count of Marital Statuses
+g1 <- ggplot(bank, aes(x=Attrition_Flag, fill=Economic_Class))
+g1 +
+  geom_histogram(stat="count", position = "dodge") + 
+  ggtitle("Customer Types & Their Economic Classes") +
+  labs(y="Frequency", x="Customer Type", fill="Economic Class") +
+  theme(text = element_text(size=12)) + 
+  theme_bw() +
+  scale_fill_manual(values=c("#2774AE", "#003B5C","#FFD100", "#FFB81C"), 
+                    limits=c("High Income", "Mid Income", "Low Income",
+                             "Unknown"))
+```
+
+
+
+```{r}
+# Income Categories vs. Attrition (cancelled)
+g2 <- ggplot(bank, aes(y=Economic_Class, fill=Attrition_Flag))
+g2 + 
+  geom_bar() +
+  labs(x="Counts", fill="Customers' Status") + 
+       ggtitle("Economic Status & Attrited Customers") +
+  scale_y_discrete(name="Economic Status", 
+                   limits=c("Unknown", "Low Income", 
+                            "Mid Income", "High Income"))
+```
+
+For people of single and married statuses, we can see that the Middle Income and Low Income economic statuses are relatively equal to each other. What's interesting is that the High Income is smaller for usage of credit for all categories. There happens to be more married people using lines of credit. With these observations, we can further explore why this might be the case and may help us determine why these people of the following categories become attrited customers.  
+
+As for the second plot, we are trying to figure out where there are more "attrited customers". It would appear that lower income customers have more churning than the other income statuses, and lower income individuals have the most frequency of people who hold some line of credit.
+
+
+## Tabling Customers' Statuses w/ Education and Economic Class
+```{r}
+table(bank$Attrition_Flag, bank$Education_Level, bank$Economic_Class) %>% 
+  prop.table(c(1,3)) %>% 
+  round(4)
+```
+
+For all the Economic Statuses, there is a higher concentration of graduates and second to that is high school education. Our team will further explore as to why this might be the case and how they might contribute to churning.
+
+
+## Further Exploration and More Plots
+```{r}
+# Customer Age
+ggplot(bank, aes(x=Customer_Age, fill=Attrition_Flag)) +
+  geom_bar() +
+  xlab("Customer Age") + 
+  ylab("Frequency")
+
+# Average Utilization Ratio
+ggplot(bank, aes(x=Avg_Utilization_Ratio, fill=Attrition_Flag)) +
+  geom_histogram(bins=20) +
+  ggtitle("Histogram of Average Utilization Ratio Among Attrited Customers") +
+  ylab("Counts") + 
+  xlab("Average Utilization Ratio")
+
+# Months on Book
+ggplot(bank, aes(x=Months_on_book, fill=Attrition_Flag)) +
+  geom_bar() +
+  xlab("Months on Book") + 
+  ylab("Frequency")
+
+# Credit Limit
+par(mfrow=c(1, 2))
+hist(bank$Credit_Limit[bank$Attrition_Flag == "Attrited Customer"], main = "Attrited Customers", xlab = "Credit Limit", freq = FALSE, breaks = 50)
+hist(bank$Credit_Limit[bank$Attrition_Flag == "Existing Customer"], main = "Existing Customers", xlab = "Credit Limit", freq = FALSE, breaks = 50)
+```
+
+Age does not seem to have a large impact on customer retention.
+
+Attrited customers tended to use less credit than existing customers did. Is there a causal relationship between credit usage and customer churning?
+
+One would suspect that customers who left would have a shorter relationship with the bank. Surprisingly, there does not seem to exist much difference between the length of the period of relationship with the bank with respect to churning.
+
+The credit limits of existing customers tend to be greater than those of attrited customers.
+
+## Categorical Variables
+```{r}
+table(bank$Attrition_Flag, bank$Education_Level)/c(1627, 8500)
+table(bank$Attrition_Flag, bank$Income_Category)/c(1627, 8500)
+table(bank$Attrition_Flag, bank$Marital_Status)/c(1627, 8500)
+```
+There doesn't seem to be a large difference between the educations, marital status, and incomes of churned and existing customers.
+
+# Potential Questions to Ask When Modeling
+Which variables should the bank optimize to retain customers? Could we estimate the probability that a certain customer will leave or stay? What kind of relationship should a bank have with its customers to minimize churning? What types of customers does the bank have the most issues with?
+
+
+
+# Final Thoughts
+Since there are a plethora of variables to look at, we should look at variable selection (such as backwards, forwards, stepwise selection, etc.). We need to utilize the general linear model to see what we can predict from the model with the best given variables. Once we have all our statistical numbers, we can start drawing possible solutions to our questions above.
+
+
+
+
+# Creating testing and training dataset
+```{r}
+set.seed(1)
+train <- sample(nrow(bank), 0.80*nrow(bank))
+bank.train <- bank[train,] # -1 to get rid of client id
+bank.test <- bank[-train,] # ditto
+```
+
+# Fitting Random Forest model
+```{r}
+recommended.mtry2 <- floor((ncol(bank.train))/3) #15
+tunegrid2 <- expand.grid(mtry=recommended.mtry2)
+set.seed(123)
+
+forestfit2 <- randomForest(as.factor(Attrition_Flag) ~ ., 
+                           data = bank.train, 
+                           mtry = recommended.mtry2, 
+                           tunegrid = tunegrid2, 
+                           importance = TRUE)
+
+# variable importance plot
+varImpPlot(forestfit2, type = 1, scale = F)
+print(forestfit2)
+plot(forestfit2)
+```
+
+
+# predicting on test data and generating metrics
+```{r}
+predTREE <- predict(forestfit2, newdata = bank.test)
+table(predTREE, bank.test$Attrition_Flag) # Confusion Matrix
+# We get ~ 96% accuracy by using random Forest with all variables
+(275 + 1678)/nrow(bank.test)
+```
+
+
+
+# Looking at our Mean Decreasing Accuracy (ordered)
+```{r}
+# Checking Importance
+MDA_chart <- sort(forestfit2$importance[,3], decreasing = TRUE)
+MDA_df1 <- data.frame(Mean_Decrease_Accuracy = MDA_chart)
+MDA_df1
+```
+
+
+
+# Making Mean Decrease Accuracy Look Nicer
+```{r}
+varImpPlot(forestfit2, type = 1, scale = F)
+MDA_sorted <- sort(forestfit2$importance[,3], decreasing = TRUE)
+MDA_df <- as.data.frame(MDA_sorted)
+
+a <- c("Total_Trans_Ct","Total_Trans_Amt","Total_Relationship_Count",
+    "Total_Revolving_Bal","Total_Ct_Chng_Q4_Q1","Total_Amt_Chng_Q4_Q1",
+    "Customer_Age","Credit_Limit","Months_Inactive_12_mon",
+    "Contacts_Count_12_mon","Gender","Marital_Status","Dependent_count",
+    "Income_Category","Card_Category")
+b <- c(0.1664559972,0.1241860172,0.0310089038,0.0237893924,0.0232609469,
+       0.0126994125,0.0059753829,0.0057880458,0.0051243597,0.0044340772,
+       0.0011829100,0.0006968573,0.0005581741,0.0002434749,0.0002172811)
+created_df <- data.frame(Names = a, Values = b)
+
+g3 <- ggplot(created_df, aes(y= reorder(Names, Values), x = Values))
+rf_imp_improved <- g3 + 
+  geom_bar(stat="identity", color=c("black"), 
+           fill=c("yellow", "yellow", rep("darkgrey", 13))) + 
+  ggtitle("Important Variables from Our Random Forest Model") +
+  labs(y="Variable Names", x="Mean Decrease Accuracy") +
+  theme(text = element_text(size=12)) + 
+  theme_bw()
+
+rf_imp_improved
+```

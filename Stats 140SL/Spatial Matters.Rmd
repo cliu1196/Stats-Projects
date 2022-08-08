@@ -1,0 +1,422 @@
+---
+title: "Spatial Matters"
+author: "Charles Liu (304804942)"
+date: "2/25/2021"
+output: html_document
+---
+
+## ----message = FALSE, warning = FALSE----------------------------------------------------------------
+library(readr) # read in csv and other files
+library(lubridate) # fix dates and times
+library(dplyr) 
+library(DT) 
+library(googleway) # need to talk with Google today
+library(ggplot2)
+library(ggmap) # ggplot like mapping
+library(stringr)
+library(plotly)
+library(leaflet)
+
+
+## ----message = FALSE, warning= FALSE-----------------------------------------------------------------
+Crime_Data_from_2020_to_Present <- 
+    read_csv("Crime_Data_from_2020_to_Present.csv",
+             col_types = cols(`DATE OCC` = 
+                                  col_datetime(format = "%m/%d/%Y %H:%M:%S %p"),
+                              `Date Rptd` = 
+                         col_datetime(format = "%m/%d/%Y %H:%M:%S %p"),
+                         `TIME OCC` = col_time(format = "%H%M")))
+Crime_Data_from_2020_to_Present$DoY <- yday(Crime_Data_from_2020_to_Present$`DATE OCC`) 
+Crime_Data_from_2020_to_Present$SaH <- ifelse(Crime_Data_from_2020_to_Present$DoY > 79, 1, 0)
+
+
+## ----message = FALSE, warning= FALSE-----------------------------------------------------------------
+UCLA <- Crime_Data_from_2020_to_Present %>%
+    filter(`Rpt Dist No` %in% c("0816","0817", "0818","0837", "0838"))
+
+
+## ----message = FALSE, warning= FALSE-----------------------------------------------------------------
+datatable(UCLA)
+
+
+## ----message = FALSE, warning= FALSE, fig.height=8, fig.width=10-------------------------------------
+plot(UCLA$LON, UCLA$LAT)
+
+
+## ## library(ggmap) ## this was issued earlier
+## register_google(key = "put the API key Google gives you here")
+
+
+UCLAmap <- get_googlemap(center = c(lon = -118.446753, 
+                                    lat = 34.066326), 
+                         zoom = 15, 
+                         size = c(600, 600), 
+                         scale = 2) 
+ggmap(UCLAmap)
+
+
+
+## ----message = FALSE, warning= FALSE, fig.height=8, fig.width=12-------------------------------------
+ggmap(get_map(location = c(-118.442784,34.069689), 
+              zoom=20, 
+              maptype = "satellite"))
+
+## ----message = FALSE, warning= FALSE, fig.height=8, fig.width=12-------------------------------------
+ggmap(get_map(location = c(-118.442784,34.069689), 
+              zoom=12, 
+              maptype = "roadmap"))
+
+## ----message = FALSE, warning= FALSE, fig.height=8, fig.width=12-------------------------------------
+ggmap(get_map(location = c(-118.442784,34.069689), 
+              zoom=14, 
+              maptype = "toner", 
+              source = "stamen"))
+
+## ----message = FALSE, warning= FALSE, fig.height=8, fig.width=12-------------------------------------
+ggmap(get_map(location = c(-118.442784,34.069689), 
+              zoom=14, 
+              maptype = "watercolor",
+              source = "stamen"))
+
+
+
+## ----echo=FALSE, message = FALSE, warning= FALSE-----------------------------------------------------
+#save(UCLAmap, file="UCLAmap.RData")
+load("UCLAmap.RData")
+UCLAmap <- ggmap(UCLAmap)
+
+
+## ----message = FALSE, warning= FALSE, fig.height=8, fig.width=12-------------------------------------
+UCLAmap + 
+  geom_point(aes(x = LON, y = LAT), 
+             data = UCLA, 
+             color = "red", 
+             size = 2)
+
+
+## ----message=FALSE, warning=FALSE--------------------------------------------------------------------
+from <- c("los angeles, ca")
+to <- c("irvine, ca", 
+          "la jolla, ca", 
+          "riverside, ca", 
+          "santa barbara, ca", 
+          "merced, ca", 
+          "santa cruz, ca", 
+          "berkeley, ca", 
+          "san francisco, ca", 
+          "davis, ca")
+mapdist(from, to, mode = "driving", output = "simple")
+
+
+## ----message=FALSE, warning=FALSE--------------------------------------------------------------------
+stores <- read_csv("gamestop.csv")
+
+
+## ----------------------------------------------------------------------------------------------------
+datatable(stores)
+
+
+## ----------------------------------------------------------------------------------------------------
+stores$Address2 <- str_trim(gsub("Suite.*|,.*|#.*","", 
+                                 stores$ADDRESS, 
+                                 ignore.case = TRUE))
+googleadd <- paste(stores$Address2,
+                   stores$CITYSTATE, 
+                   sep=", ")
+head(googleadd)
+
+
+## ----message=FALSE, warning=FALSE, eval=FALSE--------------------------------------------------------
+## not run, takes a while
+## locs <- geocode(googleadd)
+
+
+## ----------------------------------------------------------------------------------------------------
+head(locs)
+
+
+## ----eval = FALSE------------------------------------------------------------------------------------
+## not run
+## stores$longitude <- locs$lon
+## stores$latitude <- locs$lat
+
+
+## ----------------------------------------------------------------------------------------------------
+datatable(stores)
+
+
+## ----fig.height= 6, fig.width = 10-------------------------------------------------------------------
+ggplot(map_data("state"), 
+       aes(x = long, 
+           y = lat, 
+           group = group)) +
+  geom_polygon(fill="lightgray", 
+               colour = "black")
+
+## ----------------------------------------------------------------------------------------------------
+ggplot(map_data("world"), 
+       aes(x = long, 
+           y = lat, 
+           group = group)) +
+  geom_polygon(fill="cornsilk", 
+               colour = "black")
+
+## ----fig.height= 6, fig.width = 10-------------------------------------------------------------------
+ggplot(map_data(map = "county"), 
+       aes(x = long, 
+           y = lat, 
+           group = group)) +
+  geom_polygon(fill= "cyan", 
+               colour = "black")
+
+
+## ----fig.height= 6, fig.width= 5---------------------------------------------------------------------
+ggplot(map_data(map = "county", 
+                region = "california"), 
+       aes(x = long, 
+           y = lat, 
+           group = group)) +
+  geom_polygon(fill="gold", 
+               colour = "black")
+
+
+## ----fig.width=8.5-----------------------------------------------------------------------------------
+g <- ggplot(map_data("state"), 
+            aes(x = long, 
+                y = lat, 
+                group = group)) +
+  geom_polygon(fill="lightgray", 
+               colour = "black") 
+g +  geom_point(inherit.aes = FALSE, 
+                data = stores, 
+                aes(x = longitude, 
+                    y = latitude),
+                color = "red") + 
+    labs( x = "Longitude", 
+          y = "Latitude") +
+    theme_classic()
+
+
+## ----message = FALSE, warning= FALSE, fig.height=8, fig.width=12-------------------------------------
+StoreIcons <- makeIcon(
+    iconUrl = "gamestop.png",
+    iconWidth = 32, iconHeight = 38
+)
+content <- paste(stores$STORE,
+                 stores$CITYSTATE,
+                 sep = "<br/>"
+)
+leaflet(data = stores) %>% 
+    setView(lat=33.945416, 
+            lng=-117.693235, 
+            zoom=8) %>%
+    addProviderTiles(providers$CartoDB.Positron) %>%
+    addMarkers(~longitude, 
+               ~latitude, 
+               popup = content, 
+               icon=StoreIcons)
+
+
+## ----message = FALSE, warning= FALSE, fig.height=8, fig.width=12-------------------------------------
+g <- list(
+  scope = 'usa',
+  projection = list(type = 'albers usa'),
+  showland = TRUE,
+  landcolor = toRGB("gray85"),
+  subunitwidth = 1,
+  countrywidth = 1,
+  subunitcolor = toRGB("white"),
+  countrycolor = toRGB("white")
+)
+
+p <- plot_geo(stores, lon = ~longitude, 
+        lat = ~latitude) %>%
+    add_markers(
+        lon = ~longitude, 
+        lat = ~latitude,
+        hoverinfo = "text",
+        text = ~paste(stores$STORE, stores$CITYSTATE, sep = "<br />")
+        ) %>%
+    layout(
+        title = 'GameStop Store Closings<br />(Hover for store)',
+        geo = g
+)
+p
+
+
+## ----message = FALSE, warning= FALSE-----------------------------------------------------------------
+library(sp) # for spatial analysis and spatial data management
+library(rgdal) # requires package sp, will use proj.4 if installed
+library(rgeos)
+library(maptools)
+library(broom)
+library(scales)
+library(ggforce)
+library(mapproj)
+if (!require(gpclib)) install.packages("gpclib", type="source")
+gpclibPermit()
+
+
+## ----------------------------------------------------------------------------------------------------
+list.files("counties")
+
+
+## ----------------------------------------------------------------------------------------------------
+counties <- readOGR(dsn="counties", layer="counties")
+
+
+## ----------------------------------------------------------------------------------------------------
+plot(counties[counties$STATE_NAME=="California",])
+
+
+## ----message=FALSE, warning=FALSE--------------------------------------------------------------------
+soco <- counties[counties$STATE_NAME %in%
+                     c("Texas","Oklahoma","Arkansas",
+                      "Louisiana","Tennessee","Kentucky",
+                      "Mississippi","Alabama","Georgia",
+                      "Florida","South Carolina","North Carolina",
+                      "Virginia", "West Virginia","Maryland",
+                      "Delaware","District of Columbia"),]
+plot(soco)
+
+
+## ----message=FALSE, warning=FALSE--------------------------------------------------------------------
+socowgs84 <- spTransform(soco, CRS("+proj=longlat +datum=WGS84"))
+
+
+## ----message=FALSE, warning=FALSE--------------------------------------------------------------------
+socowgs84@data$id <- socowgs84@data$FIPS
+soco.polys <- tidy(socowgs84, region="FIPS")
+
+
+
+
+## need Google API 
+south <- qmap("Mississippi", zoom=5)
+south
+
+
+## ----message=FALSE, warning=FALSE--------------------------------------------------------------------
+loc <- read_csv("All_Starbucks_Locations_in_the_World.csv")
+
+
+## ----------------------------------------------------------------------------------------------------
+south + geom_polygon(aes(x= long,y= lat, group= group, alpha= 0.25), 
+                  data=soco.polys, fill='white') +
+     geom_polygon(aes(x= long,y= lat, group= group), 
+                  data= soco.polys, color= 'black', fill= NA) +
+     geom_point(inherit.aes = FALSE, data= loc, aes(x= Longitude, y= Latitude), 
+                color= "red") + 
+     theme(legend.position= "none")
+
+
+## ----------------------------------------------------------------------------------------------------
+library(RColorBrewer)
+display.brewer.all(type="seq")
+
+
+## ----------------------------------------------------------------------------------------------------
+display.brewer.all(type="div")
+
+
+## ----------------------------------------------------------------------------------------------------
+display.brewer.all(type="qual")
+
+
+## ----------------------------------------------------------------------------------------------------
+pal <- brewer.pal(4, "YlOrRd") # we select 4 colors from the palette
+
+
+## ----------------------------------------------------------------------------------------------------
+soco2 <- merge(soco.polys, socowgs84@data, by ="id")
+south + 
+    geom_polygon(aes(x=long, 
+                     y=lat, 
+                     group=group, 
+                     fill=BLACK/POP2012), alpha=0.5, data=soco2) + 
+    geom_polygon(aes(x=long, 
+                     y=lat, 
+                     group=group), 
+                 data=soco2, 
+                 color='black', 
+                 fill=NA) +
+    scale_fill_gradientn(colours = rev(brewer.pal(10, "RdYlGn")),
+                         na.value = "grey50")
+
+
+## ----------------------------------------------------------------------------------------------------
+loc <- na.omit(loc)
+coordinates(loc) <- ~ Longitude + Latitude
+class(loc)
+
+
+## ----------------------------------------------------------------------------------------------------
+proj4string(loc) <- proj4string(socowgs84)
+
+
+## ----------------------------------------------------------------------------------------------------
+plot(socowgs84)
+plot(loc, add=TRUE, col="red", pch=16, cex=0.5)
+
+
+## ----message=FALSE, warning=FALSE--------------------------------------------------------------------
+library(GISTools)
+count <- poly.counts(pts = loc, polys = socowgs84)
+count <- stack(count)
+
+
+## ----message=FALSE, warning=FALSE--------------------------------------------------------------------
+library(ggthemes)
+mymap <- fortify(socowgs84) # beware deprecated
+ggplot() + 
+    geom_map(data = mymap, aes(x = long, y = lat, map_id = id), 
+             map = mymap) +
+    geom_map(data = count, aes(fill = values, map_id = ind),
+             map = mymap, color = "black", size = 0.3) +
+    scale_fill_gradientn(colours = pal) +
+    labs(x="", y="", title="Count of Starbucks Locations in Southern Counties") + 
+    coord_map() +
+theme_map()
+
+
+## ----------------------------------------------------------------------------------------------------
+list.files("QuaternaryFaults2010")
+
+
+## ----------------------------------------------------------------------------------------------------
+faults <- readOGR(dsn="Quaternary_Faults__2010", layer="Quaternary_Faults__2010")
+
+
+## ----------------------------------------------------------------------------------------------------
+plot(faults)
+
+
+## ----warning=FALSE, message=FALSE--------------------------------------------------------------------
+vl<-c("DATE","TIME","ET", "GT","MAG","M","LAT","LON",
+      "DEPTH","Q","EVID","NPH","NGRM")
+eq15<-read.table("http://service.scedc.caltech.edu/ftp/catalogs/SCEC_DC/2015.catalog",
+               col.names = vl)[, -13]
+eq16<-read.table("http://service.scedc.caltech.edu/ftp/catalogs/SCEC_DC/2016.catalog",
+               col.names = vl)[, -13]
+eq17<-read.table("http://service.scedc.caltech.edu/ftp/catalogs/SCEC_DC/2017.catalog",
+               col.names = vl)[, -13]
+eq18<-read.table("http://service.scedc.caltech.edu/ftp/catalogs/SCEC_DC/2018.catalog",
+               col.names = vl)[, -13]
+eq19<-read.table("http://service.scedc.caltech.edu/ftp/catalogs/SCEC_DC/2019.catalog",
+               col.names = vl)[, -13]
+eq <- bind_rows(eq15, eq16, eq17, eq18, eq19) %>% dplyr::filter(MAG >= 3.0)
+head(eq)
+
+
+## ----------------------------------------------------------------------------------------------------
+coordinates(eq) <- ~ LON + LAT
+
+
+## ----------------------------------------------------------------------------------------------------
+proj4string(eq) <- proj4string(faults)
+
+
+## ----------------------------------------------------------------------------------------------------
+map('county', 'california', xlim = c(-119.000,-117.550), ylim = c(33.6000, 34.9000), lwd = 3)
+plot(faults, add=TRUE, col = "green")
+plot(eq, add=TRUE, col="red", pch=16)
