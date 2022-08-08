@@ -1,0 +1,81 @@
+---
+title: "kaggle1"
+author: "Charles Liu"
+date: "January 22, 2020"
+output: html_document
+---
+
+```{r}
+getwd()
+library(readr)
+library(tidyverse)
+FifaNoY <- read.csv("C:/Users/cliuk/Documents/UCLA Works/UCLA Winter 2020/Stats 101A/Project/Project Attempts/FifaNoY.csv", stringsAsFactors = FALSE)
+FifaTrainNew <- read.csv("C:/Users/cliuk/Documents/UCLA Works/UCLA Winter 2020/Stats 101A/Project/Project Attempts/FifaTrainNew.csv", stringsAsFactors = FALSE)
+```
+
+
+```{r}
+colnames(FifaNoY)
+```
+what about first predicting skills
+-stamina
+-agility 
+- ball control 
+- position
+
+```{r}
+SLR1 <- lm(log(WageNew) ~ log(Overall) + Club + Position, data = FifaTrainNew)
+summary(SLR1)
+
+
+## Single Predictors with WageNew that yields the results below:
+# Overall --> 31.95%
+# Potential --> 22.90%
+# Club --> 56.68%
+# Special --> 11.66%
+# International.Reputation --> 43.35%
+# Real.Face --> 23.99%
+# Reactions --> 23.79%
+# Composure --> 16.83%
+
+
+
+# WageNew ~ Overall + Potential + Club -- > 67.12%
+# WageNew ~ Overall + Potential + Club + Special + International.Reputation + Real.Face + Reactions + Composure --> 73.89% (NOT NORMAL)
+# log(WageNew) ~ log(Overall) + Club + Position --> 87.74%
+```
+
+
+```{r}
+par(mfrow=c(2,2))
+plot(SLR1)
+```
+
+
+```{r}
+library(tidyverse)
+SLR1 <- lm(log(WageNew) ~ exp(Overall) + Club + Position, data = FifaTrainNew)
+summary(SLR1)
+
+new = data.frame(FifaNoY$Overall, FifaNoY$Club, FifaNoY$Position)
+names(new) = c("Overall", "Club", "Position")
+
+new
+new[ ,1] <- lapply(new[ ,1], as.numeric)
+new[ ,2] <- lapply(new[ ,2], as.character)
+new
+
+
+
+predicts <- predict(SLR1, new) %>% as.data.frame()
+predictions <- cbind(FifaNoY$Ob, predicts)
+
+names(predictions) <- c("Ob","WageNew")
+predictions$WageNew <- ifelse(is.na(predictions$WageNew), mean(FifaTrainNew$WageNew), predictions$WageNew)
+
+```
+
+```{r}
+write.csv(predictions, "C:/Users/cliuk/Documents/UCLA Works/UCLA Winter 2020/Stats 101A/Project/Project Attempts/Attempt3.csv", row.names = FALSE)
+```
+
