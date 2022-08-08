@@ -1,0 +1,135 @@
+---
+title: "Kaggle- Cass"
+author: "Charles Liu Attempts"
+date: "3/5/2020"
+output: html_document
+---
+
+#Trying to pick better bounds for the average reputation
+0.83238
+```{r}
+library(tidyverse)
+library(dplyr)
+library(ggplot2)
+library(stringr)
+library(car)
+library(readr)
+library(VIM)
+library(mice)
+library(bestNormalize)
+library(berryFunctions)
+
+
+FifaNoY <- read.csv("C:/Users/cliuk/Documents/UCLA Works/UCLA Winter 2020/Stats 101A/Project/Project Attempts/FifaNoY.csv", stringsAsFactors = FALSE)
+
+FifaTrainNew <- read.csv("C:/Users/cliuk/Documents/UCLA Works/UCLA Winter 2020/Stats 101A/Project/Project Attempts/FifaTrainNew.csv", stringsAsFactors = FALSE)
+```
+
+```{r}
+bestNormalize(FifaTrainNew$Potential)
+select_if(FifaTrainNew, is.numeric)
+```
+
+
+```{r}
+
+# MLR m1:
+powerTransform(cbind(WageNew, Potential, Overall) ~ 1, data = FifaTrainNew)
+
+m1 <- lm(log(WageNew) ~ 0 + exp(Overall) + ClubRep2, data = FifaTrainNew)
+summary(m1)
+
+
+m2 <- lm(I(WageNew^(0.01)) ~ 0 + I(Overall^(2.5)) + I(Potential^(0.7)) + ClubRep2, data = FifaTrainNew)
+summary(m2)
+
+
+
+par(mfrow = c(2, 2))
+plot(m1)
+plot(SLR3)
+plot(SLR3.1)
+
+summary(SLR3.1)
+
+which(colnames(FifaTrainNew) == "Potential")
+
+df_data_train <- FifaTrainNew[, c(5, 6)]
+ggpairs(df_data_train)
+
+forwardAIC <- step(SLR3,direction="forward", data=FifaTrainNew)
+backAIC <- step(SLR3,direction="backward", data=FifaTrainNew)
+
+attach(FifaTrainNew)
+
+backBIC <- step(SLR3,direction="backward", data=FifaTrainNew, k=log(length(WageNew)))
+```
+
+
+```{r}
+FifaTrainNew$Overall2 <- FifaTrainNew$Overall
+FifaNoY$Overall2 <- FifaNoY$Overall^2
+
+
+#attach(FifaTrainNew)
+RepmeanByClub <- FifaTrainNew %>%
+  group_by(Club) %>%
+  summarise(
+    average.wage = mean(WageNew),
+    average.reputation = mean(International.Reputation)
+  ) %>%
+  arrange(desc(average.wage))
+
+#RepmeanByClub
+#attempt to group Club by international
+FifaTrainNew <- left_join(FifaTrainNew, RepmeanByClub[,c("Club","average.reputation")], by = c("Club" = "Club"))
+FifaNoY <- left_join(FifaNoY, RepmeanByClub[,c("Club","average.reputation")], by = c("Club" = "Club"))
+
+FifaTrainNew$ClubRep2 <- ifelse(FifaTrainNew$average.reputation >= 2, "very high", ifelse(FifaTrainNew$average.reputation >= 1.85 , "high", ifelse(FifaTrainNew$average.reputation >= 1.45, "mid-high", ifelse(FifaTrainNew$average.reputation >= 1.25, "mid", ifelse(FifaNoY$average.reputation >= 1.15, "mid-low", ifelse(FifaTrainNew$average.reputation >= 1.05, "low", "very low"))))))
+
+
+FifaNoY$ClubRep2 <- ifelse(FifaNoY$average.reputation >= 2, "very high", ifelse(FifaNoY$average.reputation >= 1.85 , "high", ifelse(FifaNoY$average.reputation >= 1.45, "mid-high", ifelse(FifaNoY$average.reputation >= 1.25, "mid", ifelse(FifaNoY$average.reputation >= 1.15, "mid-low", ifelse(FifaNoY$average.reputation >= 1.05, "low", "very low"))))))
+
+
+```
+
+
+
+
+```{r}
+#MLR
+SLR3 <- lm(log(WageNew) ~ 0 + Overall2 + ClubRep2, data = FifaTrainNew)
+summary(SLR3)
+anova(SLR3)
+
+leverages <- hatvalues(SLR3)
+# h_ii > 2 * (p+1)/n
+leverage_points <- which(leverages > 2 * mean(leverages))
+outliers <- which(abs(rstandard(SLR3)) > 2)
+bad_leverages <- intersect(leverage_points, outliers)
+
+SLR3.1 <- lm(log(WageNew) ~ 0 + Overall2 + ClubRep2, data = FifaTrainNew[-bad_leverages,])
+summary(SLR3.1)
+#par(mfrow=c(2,2))
+#plot(SLR3.1)
+
+#For sanity check
+new_data = data.frame(FifaTrainNew$Overall2, FifaTrainNew$ClubRep2)
+names(new_data) = c("Overall", "ClubRep2")
+predicts <- exp(predict(m1, new_data)) %>% as.data.frame()
+predictions <- cbind(FifaTrainNew$Ob, FifaTrainNew$WageNew, predicts)
+
+names(predictions) <- c("Ob", "RealWage", "WageNew")
+predictions$WageNew <- ifelse(is.na(predictions$WageNew), mean(FifaTrainNew$WageNew), predictions$WageNew)
+write.csv(predictions, "C:/Users/cliuk/Documents/UCLA Works/UCLA Winter 2020/Stats 101A/Project/Project Attempts/Attempt5.csv", row.names = FALSE)
+
+#For kaggle
+new_data = data.frame(FifaNoY$Overall2, FifaNoY$ClubRep2)
+names(new_data) = c("Overall2", "ClubRep2")
+predicts <- exp(predict(SLR3.1, new_data)) %>% as.data.frame()
+predictions <- cbind(FifaNoY$Ob, predicts)
+
+names(predictions) <- c("Ob","WageNew")
+predictions$WageNew <- ifelse(is.na(predictions$WageNew), mean(FifaTrainNew$WageNew), predictions$WageNew)
+write.csv(predictions, "C:/Users/cassa/Documents/UCLA/Third Year/WINTER 2020/STATS 101A/kaggle3.csv", row.names = FALSE)
+```
