@@ -1,0 +1,202 @@
+---
+title: "Stats_C183_Project_3_Charles_Liu"
+author: "Charles Liu (304804942)"
+date: "5/6/2020"
+output: pdf_document
+---
+
+# Loading Necessary Packages:
+```{r}
+library(readr)
+```
+
+
+
+Two periods:
+1.  01-Jan-2012 to 01-Jan-2017 
+2.  01-Jan-2017 to 31-Mar-2020
+
+# a.1)
+```{r}
+a1 <- read.csv("C:/Users/cliuk/Documents/UCLA Works/UCLA Spring 2020/Stats C183/Project/stockData_2012-2017.csv", sep=",", header=TRUE)
+
+# Convert adjusted close prices into returns:
+r1 <- (a1[-1,3:ncol(a1)]-a1[-nrow(a1),3:ncol(a1)])/a1[-nrow(a1),3:ncol(a1)]
+
+# Regression of all the other stocks on S&P500:
+q <- lm(r1$X.GSPC ~ r1$BHP + r1$GOLD + r1$VALE + r1$GOOG + r1$T + r1$NFLX +
+          r1$AMZN + r1$MCD + r1$MCD + r1$TSLA + r1$WMT + r1$KO + r1$COST + 
+          r1$XOM + r1$CVX + r1$TRP + r1$BRK.B + r1$V + r1$JPM + r1$JNJ + 
+          r1$AMGN + r1$CVS + r1$UNP + r1$BA + r1$GE + r1$DLR + r1$BXP + 
+          r1$O + r1$MSFT + r1$AAPL + r1$NVDA)
+
+
+# Get the estimates of alpha, beta, and sigma^2:
+alpha_estimate <- q$coefficients[1]
+beta_estimate <- q$coefficients[2:31]
+sigma2_estimate <- sum(q$residuals^2)/(nrow(a1)-2)
+
+# Values for our estimates:
+alpha_estimate
+beta_estimate
+sigma2_estimate
+```
+
+
+# a.2)
+```{r}
+# Compute the variance covariance matrix of the returns for each period:
+covmat1 <- var(r1[-1])
+
+# Covariance-Variance Matrix (30 x 30):
+covmat1 # without ^GSPC
+```
+
+
+# a.3)
+```{r, warning = FALSE}
+# Setting up Project 2 Problem (b-1):
+a <- read.csv("C:/Users/cliuk/Documents/UCLA Works/UCLA Spring 2020/Stats C183/Project/stockData_all.csv", sep=",", header=TRUE)
+r <- (a[-1,3:ncol(a)]-a[-nrow(a),3:ncol(a)])/a[-nrow(a),3:ncol(a)]
+means <- colMeans(r[-1])
+covmat <- cov(r[-1])
+cormat <- cor(r[-1])
+variances <- diag(covmat)
+stdev <- diag(covmat)^.5
+ones <- rep(1, 30)
+A <- t(ones) %*% solve(covmat) %*% means
+B <- t(means) %*% solve(covmat) %*% means
+C <- t(ones) %*% solve(covmat) %*% ones
+D <- B * C - A^2
+E <- seq(-5,5,.1)
+sigma2 <- (C*E^2 - 2*A*E +B) /D
+
+# Hyperbola Method from Project 2 Problem (b-1):
+plot(0, A/C, main = "Portfolio possibilities curve", xlab = "Risk (standard deviation)",
+     ylab = "Expected Return", type = "n",
+     xlim = c(-2*sqrt(1/C), 4*sqrt(1/C)), 
+     ylim = c(-2*A/C, 4*A/C))
+points(0, A/C, pch = 19)
+abline(v = 0)
+abline(h = A/C)
+abline(h = 0)
+points(sqrt(1/C), A/C, pch=19)
+V <- seq(-1, 1, 0.001)
+A1 <- A/C + V * sqrt(D/C)
+A2 <- A/C - V * sqrt(D/C)
+points(V, A1, type = "l")
+points(V, A2, type = "l")
+
+# Efficient frontier:
+minvar <- 1/C
+minE <- A/C
+sdeff <- seq((minvar)^0.5, 1, by = 0.0001)
+options(warn = -1)
+y1 <- (A + sqrt(D*(C*sdeff^2 - 1)))*(1/C) 
+y2 <- (A - sqrt(D*(C*sdeff^2 - 1)))*(1/C) 
+options(warn = 0)
+points(sdeff, y1, type = "l")
+points(sdeff, y2, type = "l")
+
+
+
+# 01-Jan-2012 to 01-Jan-2017 Set up:
+means1 <- colMeans(r1[-1])
+covmat1 <- cov(r1[-1])
+var1 <- diag(covmat1)
+stdev1 <- diag(covmat1)^.5
+A1 <- t(ones) %*% solve(covmat1) %*% means1
+B1 <- t(means1) %*% solve(covmat1) %*% means1
+C1 <- t(ones) %*% solve(covmat1) %*% ones
+D1 <- B1 * C1 - A1^2
+E <- seq(-5,5,.1)
+sigma2_1 <- (C1*E^2 - 2*A1*E +B1) /D1
+
+# SIM Frontier (BLUE):
+SIM_Var <- 1/C1
+SIM_E <- A1/C1
+sdeff1 <- seq((SIM_Var)^0.5, 1, by = 0.0001)
+options(warn = -1)
+y1_1 <- (A1 + sqrt(D1*(C1*sdeff1^2 - 1)))*(1/C1) 
+y2_1 <- (A1 - sqrt(D1*(C1*sdeff1^2 - 1)))*(1/C1) 
+options(warn = 0)
+points(sdeff1, y1_1, type = "l", col = "blue")
+points(sdeff1, y2_1, type = "l", col = "blue")
+```
+
+
+
+# b) Blume's Technique
+```{r}
+# Loading the data for (2012 - 2017) & (2017 - 2020):
+a1 <- read.csv("C:/Users/cliuk/Documents/UCLA Works/UCLA Spring 2020/Stats C183/Project/stockData_2012-2017.csv", sep=",", header=TRUE)
+a2 <- read.csv("C:/Users/cliuk/Documents/UCLA Works/UCLA Spring 2020/Stats C183/Project/stockData_2017-2020.csv", sep=",", header=TRUE)
+
+# Convert adjusted close prices into returns:
+r1 <- (a1[-1,3:ncol(a1)]-a1[-nrow(a1),3:ncol(a1)])/a1[-nrow(a1),3:ncol(a1)]
+r2 <- (a2[-1,3:ncol(a2)]-a2[-nrow(a2),3:ncol(a2)])/a2[-nrow(a2),3:ncol(a2)]
+
+# Compute the variance covariance matrix of the returns for each period:
+covmat1 <- var(r1)
+covmat2 <- var(r2)
+
+# Compute the betas in each period:
+beta1 <- covmat1[1,-1] / covmat1[1,1]
+beta2 <- covmat2[1,-1] / covmat2[1,1]
+
+# Values of our Betas for Period 1 and Period 2:
+beta1
+beta2
+
+# Here is the plot of the betas in period 2 against the betas in perod 1:
+plot(beta1, beta2, main = "Betas for Period 2 vs. Period 1", 
+     xlab = "Period 1 Betas", ylab = "Period 2 Betas")
+
+# Correlation between the betas in the two periods:
+cor(beta1, beta2)
+
+# Adjust betas using the Blume's technique:
+q1 <- lm(beta2 ~ beta1)
+beta3adj_blume <- q1$coef[1] + q1$coef[2]*beta2
+
+# Value for Blume's Method
+beta3adj_blume
+```
+
+
+
+# b) Vasicek's Technique
+```{r}
+# Vasicek's method:
+beta1 <- rep(0,30)
+alpha1 <- rep(0,30)
+sigma_e1 <- rep(0,30)
+var_beta1 <- rep(0,30)
+
+for(i in 1:30){
+  q <- lm(data=r1, formula=r1[,i+1] ~ r1[,1])
+  beta1[i] <- q$coefficients[2] 
+  alpha1[i] <- q$coefficients[1] 
+  sigma_e1[i] <- summary(q)$sigma^2
+  var_beta1[i] <- vcov(q)[2,2] 
+}
+
+
+#Adjusting the betas using the Vasicek's technique:
+beta3adj_vasicek <- var_beta1*mean(beta1)/(var(beta1)+var_beta1) + 
+  var(beta1)*beta1/(var(beta1)+var_beta1)
+              
+#Now let's compare:
+#Note:
+#beta2:  Betas in period 1 that can be used as forecasts for period 2.
+#beta3adj_blume:  Adjusted betas (Blume) that can be used as forecast 
+#                 for period 3 (01-Aor-2020 to 01-Apr-2024).
+#beta3adj_vasicek:  Adjusted betas (Vasicek) that can be used as forecast 
+#                 for period 2.
+
+cbind(beta1, beta2, beta3adj_blume, beta3adj_vasicek)
+PRESS_Vasicek <- sum((beta3adj_vasicek-beta1)^2) / 30
+
+# Values of our PRESS's:
+PRESS_Vasicek # Vasicek's Method
+```

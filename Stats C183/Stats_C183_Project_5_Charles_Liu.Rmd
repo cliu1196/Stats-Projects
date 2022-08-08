@@ -1,0 +1,361 @@
+---
+title: "Stats_C183_Project_5_Charles_Liu"
+author: "Charles Liu (304804942)"
+date: "5/15/2020"
+output: pdf_document
+---
+
+# Loading Necessary Packages/Files:
+```{r}
+library(readr)
+# Loading the data for all stocks:
+a <- read.csv("C:/Users/cliuk/Documents/UCLA Works/UCLA Spring 2020/Stats C183/Project/stockData_all.csv", sep=",", header=TRUE)
+```
+
+
+
+# a)
+```{r, warning = FALSE}
+# Convert adjusted close prices into returns:
+r <- (a[-1,3:ncol(a)]-a[-nrow(a),3:ncol(a)])/a[-nrow(a),3:ncol(a)]
+
+#Compute the betas:
+means <- colMeans(r)
+covmat <- var(r)
+beta <- covmat[1,-1] / covmat[1,1]
+beta
+# For Beta, only GOLD is negative, so we exclude it in our SIM (Single Index Model)
+
+############################################################################
+means_SIM <- colMeans(r[,-c(1,3)]) # 29 stocks instead of 31 (removes GOLD, S&P500)
+covmat_SIM <- var(r[,-c(1,3)]) # Removed GOLD as its Beta is NOT positive.
+
+# Set up A - E formulas & column of Ones:
+ones_SIM <- rep(1, 29)
+A_SIM <- t(ones_SIM) %*% solve(covmat_SIM) %*% means_SIM
+B_SIM <- t(means_SIM) %*% solve(covmat_SIM) %*% means_SIM
+C_SIM <- t(ones_SIM) %*% solve(covmat_SIM) %*% ones_SIM
+D_SIM <- B_SIM * C_SIM - A_SIM^2
+E_SIM <- seq(-5,5,.1)
+
+# Set up the plot:
+plot(sqrt(1/C_SIM), A_SIM/C_SIM,  xlim=c(0,0.1), ylim=c(0,0.1),pch=19, ylab = "Expected Returns", xlab = "Standard Deivation (Risk)", main = "Stocks w/ Positive Betas (SIM)")
+minvar_SIM <- 1/C_SIM
+minE_SIM <- A_SIM/C_SIM
+sdeff_SIM <- seq((minvar_SIM)^0.5, 1, by = 0.0001)
+options(warn = -1)
+y1_SIM <- (A_SIM + sqrt(D_SIM*(C_SIM*sdeff_SIM^2 - 1)))*(1/C_SIM) 
+y2_SIM <- (A_SIM - sqrt(D_SIM*(C_SIM*sdeff_SIM^2 - 1)))*(1/C_SIM) 
+options(warn = 0)
+points(sdeff_SIM, y1_SIM, type = "l")
+points(sdeff_SIM, y2_SIM, type = "l")
+
+# Choose risk-free return:
+Rf <- 0.005
+
+# Range of expected return:
+sigma <- seq(0,.5, .001)
+Rp1_SIM <- Rf + sigma*sqrt(C_SIM*Rf^2-2*Rf*A_SIM+B_SIM) 
+Rp2_SIM <- Rf - sigma*sqrt(C_SIM*Rf^2-2*Rf*A_SIM+B_SIM) 
+points(sigma, Rp1_SIM, type="l")
+points(sigma, Rp2_SIM, type="l")
+
+# Point of tangency:
+Ri_SIM <- means_SIM-Rf
+z_SIM <- solve(covmat_SIM) %*% Ri_SIM
+x_G_SIM <- z_SIM/sum(z_SIM)
+Ri_bar_SIM <- t(x_G_SIM) %*% means_SIM
+varr_G_SIM <- t(x_G_SIM) %*% covmat_SIM %*% x_G_SIM
+sdev_G_SIM <- varr_G_SIM^.5
+points(sdev_G_SIM, Ri_bar_SIM, pch=19, col = "blue")
+text(sdev_G_SIM, Ri_bar_SIM + 0.02, "G_SIM")
+
+# Composition of Optimal Portfolio:
+x_G_SIM
+Ri_bar_SIM
+sdev_G_SIM
+```
+
+
+
+# b)
+```{r, message = FALSE, warning = FALSE}
+# Keep only the stocks with positive betas:
+rrr <- r[,-c(1,which(beta<0)+1)]  
+
+# Initialize
+beta <- rep(0,ncol(rrr))
+alpha <- rep(0,ncol(rrr))
+mse <- rep(0,ncol(rrr))
+Ribar <- rep(0,ncol(rrr))
+Ratio <- rep(0,ncol(rrr))
+stock <- rep(0,ncol(rrr))
+
+# Risk free asset:
+rf <- 0.005
+
+# This for loop computes the required inputs:
+for(i in 1:ncol(rrr)){
+  q <- lm(data=rrr, formula=rrr[,i] ~ r[,1])
+  beta[i] <- q$coefficients[2] 
+  alpha[i] <- q$coefficients[1] 
+  mse[i] <- summary(q)$sigma^2
+  Ribar[i] <- q$coefficients[1]+q$coefficients[2]*mean(r[,1])
+  Ratio[i] <- (Ribar[i]-rf)/beta[i]
+  stock[i] <- i
+}
+
+# So far we have this table:
+xx <- (cbind(stock,alpha, beta, Ribar, mse, Ratio))
+
+# Order the table based on the excess return to beta ratio:
+A_ordered <- xx[order(-xx[,6]),]
+col1 <- rep(0,nrow(A_ordered))
+col2 <- rep(0,nrow(A_ordered))
+col3 <- rep(0,nrow(A_ordered))
+col4 <- rep(0,nrow(A_ordered))
+col5 <- rep(0,nrow(A_ordered))
+
+# Create the last 5 columns of the table:
+col1 <- (A_ordered[,4]-rf)*A_ordered[,3]/A_ordered[,5]
+col3 <- A_ordered[,3]^2/A_ordered[,5]
+for(i in(1:nrow(covmat))) {
+  col2[i] <- sum(col1[1:i])
+  col4[i] <- sum(col3[1:i])
+}
+
+# Compute the Ci (col5):
+for(i in (1:nrow(A_ordered))) {
+  col5[i] <- var(r[,1])*col2[i]/(1+var(r[,1])*col4[i])
+}
+
+table1 <- cbind(A_ordered, col1, col2, col3, col4, col5)
+
+# Express the entire table:
+table1
+```
+
+
+
+# c)
+```{r, warning = FALSE}
+# SHORT SALES ALLOWED:
+z_short <- (A_ordered[,3]/A_ordered[,5])*(A_ordered[,6]-col5[nrow(A_ordered)])
+x_short <- z_short/sum(z_short)
+x_short <- x_short[order(A_ordered[,1])]
+names(x_short) <- names(a)[-c(1,2,3,5)]
+Rbar_short <- t(x_short) %*% Ribar
+sdev_short <- sqrt(t(x_short) %*% covmat_SIM %*% x_short)
+
+#SHORT SALES NOT ALLOWED:
+table1 <- cbind(A_ordered, col1, col2, col3, col4, col5)
+table2 <- table1[1:which(col5==max(col5)), ]
+z_no_short <- (table2[,3]/table2[,5])*(table2[,6]-max(col5))
+x_no_short <- z_no_short/sum(z_no_short)
+names(x_no_short) <- names(means_SIM)[c(24,8,5,29,6,9,16,27,11)]
+Rbar_no_short <- t(x_no_short) %*% Ribar[c(24,8,5,29,6,9,16,27,11)]
+sdev_no_short <- sqrt(t(x_no_short) %*% covmat_SIM[c(24,8,5,29,6,9,16,27,11), c(24,8,5,29,6,9,16,27,11)] %*% x_no_short)
+
+# Composition of Point of Tangency (Short Sales Allowed):
+x_short
+
+# Composition of Point of Tangency (Short Sales NOT Allowed):
+x_no_short
+
+# Previous Project Plot:
+plot(sqrt(1/C_SIM), A_SIM/C_SIM,  xlim=c(0,0.15), ylim=c(0,0.15),pch=19, ylab = "Expected Returns", xlab = "Standard Deivation (Risk)", main = "Stocks w/ Positive Betas (SIM)")
+minvar_SIM <- 1/C_SIM
+minE_SIM <- A_SIM/C_SIM
+sdeff_SIM <- seq((minvar_SIM)^0.5, 1, by = 0.0001)
+options(warn = -1)
+Rbar_short <- 0.1281
+Rbar_no_short <- 0.045
+y1_SIM <- (A_SIM + sqrt(D_SIM*(C_SIM*sdeff_SIM^2 - 1)))*(1/C_SIM) 
+y2_SIM <- (A_SIM - sqrt(D_SIM*(C_SIM*sdeff_SIM^2 - 1)))*(1/C_SIM) 
+options(warn = 0)
+points(sdeff_SIM, y1_SIM, type = "l")
+points(sdeff_SIM, y2_SIM, type = "l")
+points(sigma, Rp1_SIM, type="l")
+points(sigma, Rp2_SIM, type="l")
+Ri_SIM <- means_SIM-Rf
+z_SIM <- solve(covmat_SIM) %*% Ri_SIM
+x_G_SIM <- z_SIM/sum(z_SIM)
+Ri_bar_SIM <- t(x_G_SIM) %*% means_SIM
+varr_G_SIM <- t(x_G_SIM) %*% covmat_SIM %*% x_G_SIM
+sdev_G_SIM <- varr_G_SIM^.5
+points(sdev_G_SIM, Ri_bar_SIM, pch=19, col = "blue")
+text(sdev_G_SIM, Ri_bar_SIM + 0.008, "G_SIM")
+
+# Plot it with Short Sales' and No Short Sales' Tangency Point:
+points(sdev_short, Rbar_short, pch=19, col = "green") # Short Sales Allowed
+text(sdev_short, Rbar_short + 0.02, "G_short")
+points(sdev_no_short, Rbar_no_short, pch=19, col = "red") # Short Sales NOT Allowed
+text(sdev_no_short, Rbar_no_short + 0.02, "G_no_short")
+```
+
+
+
+# d)
+```{r}
+# Initialize for the for() loop:
+Rfr <- seq(-0.05,.01,0.0005)
+rbar_opt <- rep(0,length(Rfr))
+risk_opt <- rep(0,length(Rfr))
+
+
+# Start the for() loop:
+for(l in 1:length(Rfr)){
+  rf <- Rfr[l]
+  beta <- rep(0,ncol(rrr))
+  alpha <- rep(0,ncol(rrr))
+  mse <- rep(0,ncol(rrr))
+  Ribar <- rep(0,ncol(rrr))
+  Ratio <- rep(0,ncol(rrr))
+  stocknum <- rep(0,ncol(rrr))
+  for(i in 1:ncol(rrr)){
+    q <- lm(data=rrr, formula=rrr[,i] ~ r[,1])
+    beta[i] <- q$coefficients[2] 
+    alpha[i] <- q$coefficients[1] 
+    mse[i] <- summary(q)$sigma^2
+    Ribar[i] <- q$coefficients[1]+q$coefficients[2]*mean(r[,1])
+    Ratio[i] <- (Ribar[i]-rf)/beta[i]
+    stocknum[i] <- i
+  }
+  xx <- (data.frame(stocknum,alpha, beta, Ribar, mse, Ratio))
+  A <- xx[order(-xx[,6]),]
+  col1 <- rep(0,nrow(A))
+  col2 <- rep(0,nrow(A))
+  col3 <- rep(0,nrow(A))
+  col4 <- rep(0,nrow(A))
+  col5 <- rep(0,nrow(A))
+  col1 <- (A[,4]-rf)*A[,3]/A[,5]
+  col3 <- A[,3]^2/A[,5]
+  for(i in(1:nrow(A))) {
+    col2[i] <- sum(col1[1:i])
+    col4[i] <- sum(col3[1:i])
+  }
+  cbind(A, col1, col2, col3, col4)
+  for(i in (1:nrow(A))) {
+    col5[i] <- var(r[,1])*col2[i]/(1+var(r[,1])*col4[i])
+  }
+  B <- cbind(A, col1, col2, col3, col4, col5)
+  rownames(B) <- NULL
+  table2 <- B[1:which(col5==max(col5)), ]
+  z_no_short <- (table2[,3]/table2[,5])*(table2[,6]-max(col5))
+  x_no_short <- z_no_short/sum(z_no_short)
+  r1 <- data.frame(rrr[,table2[,1]])
+  beta1 <- rep(0,ncol(r1))
+  sigma_e1 <- rep(0,ncol(r1))
+  alpha1 <- rep(0,ncol(r1))
+  for(i in 1:ncol(r1)){
+    q1<- lm(r1[,i] ~ r[,1])
+    beta1[i] <- q1$coefficients[2] 
+    sigma_e1[i] <- summary(q1)$sigma^2
+    alpha1[i] <- q1$coefficients[1] 
+  } 
+  means1 <- colMeans(r1)
+  xx <- rep(0,ncol(r1)*(ncol(r1)))
+  varcovar <- matrix(xx,nrow=ncol(r1),ncol=ncol(r1))
+  for (i in 1:ncol(r1)){
+    for (j in 1:ncol(r1)){
+      varcovar[i,j]=beta1[i]*beta1[j]*var(r[,1])
+      if(i==j){varcovar[i,j]=beta1[i]^2*var(r[,1])+ sigma_e1[i]}
+    }
+  }
+  rbar_opt[l] <- t(x_no_short) %*% means1
+  risk_opt[l] <- ( t(x_no_short) %*% varcovar %*% x_no_short )^.5
+}
+
+# Create the Plot for Efficient Frontier When Short Sales NOT Allowed:
+plot(risk_opt, rbar_opt, type="l", main="Efficient frontier when short sales not allowed", ylab="Portfolio expected return", xlab="Portfolio standard deviation")
+```
+
+
+
+# e)
+```{r, warning = FALSE}
+# Convert adjusted close prices into returns:
+r <- (a[-1, 3:ncol(a)] - a[-nrow(a), 3:ncol(a)]) / a[-nrow(a),3:ncol(a)]
+
+# Compute inputs:
+stock_CCM <- 1:30
+Ribar_CCM <- colMeans(r)
+diff_CCM <- Ribar_CCM - Rf
+covmat_CCM <- cov(r)
+stdev_CCM <- diag(covmat)^.5
+ratio_CCM <- diff_CCM / stdev_CCM
+cormat_CCM <- cor(r)
+avg_cor_CCM <- (sum(cormat_CCM) - 30) / (30*29)
+
+# Table Construction
+xx_CCM <- (cbind(stock_CCM, Ribar_CCM, diff_CCM, stdev_CCM, ratio_CCM))
+A_CCM <- xx_CCM[order(-xx_CCM[,5]),]
+col1 <- rep(0, nrow(A_CCM))
+col2 <- rep(0, nrow(A_CCM))
+col3 <- rep(0, nrow(A_CCM))
+col1 <- avg_cor_CCM / (1 - avg_cor_CCM + stock_CCM*avg_cor_CCM)
+for(i in(1:nrow(A_CCM))){
+col2[i] <- sum(A_CCM[1:i, 5])
+}
+
+col3 <- col1 * col2 # Ci
+table3 <- cbind(A_CCM, col1, col2, col3)
+
+# Express the Table:
+table3
+
+```
+
+
+
+# f)
+```{r, warning = FALSE}
+# SHORT SALES ALLOWED:
+z_short_CCM <- (A_CCM[,5] - col3[nrow(A_CCM)]) / ((1 - avg_cor_CCM)*A_CCM[,4])
+x_short_CCM <- z_short_CCM/sum(z_short_CCM)
+names(x_short_CCM) <- names(a)[-c(1,2)]
+
+
+# SHORT SALES NOT ALLOWED:
+table3 <- cbind(A_CCM, col1, col2, col3)
+table4 <- table3[1:which(col3 == max(col3)), ]
+z_no_short_CCM <- (table4[,5] - col3[nrow(table4)]) / ((1 - avg_cor_CCM)*table4[,4])
+x_no_short_CCM <- z_no_short_CCM/sum(z_no_short_CCM)
+x_no_short_CCM <- x_no_short_CCM[order(A_CCM[,1])]
+x_no_short_CCM <- ifelse(is.na(x_no_short_CCM), 0, x_no_short_CCM)
+names(x_no_short_CCM) <- names(a)[-c(1,2)]
+
+
+# Composition of short sales and no short sales:
+x_short_CCM
+x_no_short_CCM
+
+
+# Plot it all:
+mean_short <- t(x_short_CCM) %*% means
+sd_short <- sqrt(t(x_short_CCM) %*% covmat %*% x_short_CCM)
+mean_no_short <- t(x_no_short_CCM) %*% means
+sd_no_short <- sqrt(t(x_no_short_CCM) %*% covmat %*% x_no_short_CCM)
+ones <- matrix(1, nrow = 31, ncol = 1)
+
+A2 <- t(ones) %*% solve(covmat) %*% means
+B <- t(means) %*% solve(covmat) %*% means
+C <- t(ones) %*% solve(covmat) %*% ones
+D <- B*C - A2^2
+mean_short <- 0.04
+mean_no_short <- 0.04
+plot(stdev_CCM, Ribar_CCM, xlab = "Standard Deviation", ylab = "Expected Return", pch = 16,
+xlim = c(0,0.15), ylim = c(0, 0.04))
+# Efficient frontier:
+minvar <- 1/C
+minE <- A2/C
+sdeff <- seq((minvar)^0.5, 1, by = 0.0001)
+options(warn = -1)
+y1 <- (A2 + sqrt(D*(C*sdeff^2 - 1)))*(1/C)
+y2 <- (A2 - sqrt(D*(C*sdeff^2 - 1)))*(1/C)
+options(warn = 0)
+points(sdeff, y1, type = "l")
+points(sdeff, y2, type = "l")
+points(sd_short, mean_short, pch = 16, col = "red")
+points(sd_no_short, mean_no_short, pch = 16, col = "orange")
+```
