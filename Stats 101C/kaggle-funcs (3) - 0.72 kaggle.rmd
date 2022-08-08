@@ -1,0 +1,561 @@
+---
+title: "kaggle funcs"
+author: "Cassandra Tai"
+date: "11/5/2020"
+output: pdf_document
+---
+
+## Load necessary libraries
+```{r, warning = FALSE, message = FALSE}
+#library(ggplot2)
+library(dplyr)
+#library(reshape2)
+#library(caret)
+library(boot)
+#library(readxl)
+library(MASS) # for LDA and QDA
+library(nnet) #for more than 2 response values logistic
+```
+
+##set working directory 
+```{r}
+setwd("C:\\Users\\cassa\\Documents\\UCLA\\Fourth Year\\Stats 101C\\Midterm Project") #change it to your own!
+```
+
+## Read in data
+```{r}
+data <- read.csv("training.csv", header = TRUE)
+test <- read.csv("test.csv", header = TRUE) 
+
+dim(data)
+
+#attach(data)
+#convertclass to factor
+#tags <- c("NG","OG","TsG")[as.integer(data$class) + 1]
+#data$classfactor <- factor(tags, levels=c("NG","OG","TsG"))
+```
+
+## Getting rid of outliers
+```{r}
+predictors <- c("H3K79me2_height", "N_LOF", "VEST_score","BioGRID_log_degree", "H3Kme2_height", "One_Minus_S50_score_replication_timing","ncGERP","Frameshift_indel_fraction")
+NG <- data[which(data$class == 0),]
+OG <- data[which(data$class == 1),]
+TSG <- data[which(data$class == 2),]
+##For NG
+above <- which(NG$H3K79me2_height > quantile(NG$H3K79me2_height,.75)[[1]] + 1.5*IQR(NG$H3K79me2_height))
+#below <- which(NG$H3K79me2_height < quantile(NG$H3K79me2_height,.25)[[1]] - 1.5*IQR(NG$H3K79me2_height))
+NG <- NG[-c(above),]
+below <- which(NG$H3K4me2_width > quantile(NG$H3K4me2_width,.75)[[1]] + 2*IQR(NG$H3K4me2_width))
+#below <- which(TSG$H3Kme2_height < quantile(TSG$H3Kme2_height,.25)[[1]] - 1.5*IQR(TSG$H3Kme2_height))
+above <- which(NG$N_LOF > quantile(NG$N_LOF,.75)[[1]] + 1.5*IQR(NG$N_LOF))
+NG <- NG[-c(above,below),]
+
+#above <- which(NG$N_LOF > quantile(NG$N_LOF,.75)[[1]] + 1.5*IQR(NG$N_LOF))
+#below <- which(NG$N_LOF < quantile(NG$N_LOF,.25)[[1]] - 1.5*IQR(NG$N_LOF))
+
+#NG <- NG[-c(above),]
+
+above <- which(NG$VEST_score > quantile(NG$VEST_score,.75)[[1]] + 2*IQR(NG$VEST_score))
+#below <- which(NG$VEST_score < quantile(NG$VEST_score,.25)[[1]] - 1.5*IQR(NG$VEST_score))
+
+NG <- NG[-c(above),]
+
+#above <- which(NG$Inactivating_mutations_fraction > quantile(NG$Inactivating_mutations_fraction,.75)[[1]] + 2*IQR(NG$Inactivating_mutations_fraction))
+#below <- which(NG$Inactivating_mutations_fraction < quantile(NG$Inactivating_mutations_fraction,.25)[[1]] - 1.5*IQR(NG$Inactivating_mutations_fraction))
+#above <- which(NG$ncGERP > quantile(NG$ncGERP,.75)[[1]] + 2*IQR(NG$ncGERP))
+#NG <- NG[-c(above),]
+
+#above <- which(NG$Frameshift_indel_fraction > quantile(NG$Frameshift_indel_fraction,.75)[[1]] + 2.5*IQR(NG$Frameshift_indel_fraction))
+#below <- which(NG$Frameshift_indel_fraction < quantile(NG$Frameshift_indel_fraction,.25)[[1]] - 2.5*IQR(NG$Frameshift_indel_fraction))
+
+#NG <- NG[-c(above,below),]
+
+#For OG
+above <- which(OG$H3K79me2_height > quantile(OG$H3K79me2_height,.75)[[1]] + 1.5*IQR(OG$H3K79me2_height))
+below <- which(OG$H3K79me2_height < quantile(OG$H3K79me2_height,.25)[[1]] - 1.5*IQR(OG$H3K79me2_height))
+
+OG <- OG[-c(above,below),]
+
+#above <- which(OG$N_LOF > quantile(OG$N_LOF,.75)[[1]] + 1.5*IQR(OG$N_LOF))
+#below <- which(OG$N_LOF < quantile(OG$N_LOF,.25)[[1]] - 1.5*IQR(OG$N_LOF))
+
+#OG <- OG[-c(above,below),]
+
+#above <- which(OG$VEST_score > quantile(OG$VEST_score,.75)[[1]] + 1.5*IQR(OG$VEST_score))
+#below <- which(OG$VEST_score < quantile(OG$VEST_score,.25)[[1]] - 1.5*IQR(OG$VEST_score))
+
+#OG <- OG[-c(above,below),]
+
+#above <- which(OG$Inactivating_mutations_fraction > quantile(OG$Inactivating_mutations_fraction,.75)[[1]] + 1.5*IQR(OG$Inactivating_mutations_fraction))
+#below <- which(OG$Inactivating_mutations_fraction < quantile(OG$Inactivating_mutations_fraction,.25)[[1]] - 1.5*IQR(OG$Inactivating_mutations_fraction))
+
+#OG <- OG[-c(above,below),]
+
+#above <- which(OG$Frameshift_indel_fraction> quantile(OG$Frameshift_indel_fraction,.75)[[1]] + 1.5*IQR(OG$One_Minus_S50_score_replication_timiOG))
+#below <- which(OG$Frameshift_indel_fraction < quantile(OG$Frameshift_indel_fraction,.25)[[1]] - 1.5*IQR(OG$One_Minus_S50_score_replication_timiOG))
+
+#OG <- OG[-c(above,below),]
+
+
+#For TSG
+#above <- which(TSG$H3K79me2_height > quantile(TSG$H3K79me2_height,.75)[[1]] + 1.5*IQR(TSG$H3K79me2_height))
+#below <- which(TSG$H3K79me2_height < quantile(TSG$H3K79me2_height,.25)[[1]] - 1.5*IQR(TSG$H3K79me2_height))
+#below <- which(TSG$H3Kme2_height < quantile(TSG$H3Kme2_height,.25)[[1]] - 1.5*IQR(TSG$H3Kme2_height))
+#TSG <- TSG[-c(below),]
+
+#above <- which(TSG$N_LOF > quantile(TSG$N_LOF,.75)[[1]] + 1.5*IQR(TSG$N_LOF))
+#below <- which(TSG$N_LOF < quantile(TSG$N_LOF,.25)[[1]] - 1.5*IQR(TSG$N_LOF))
+
+#TSG <- TSG[-c(above,below),]
+
+#above <- which(TSG$VEST_score > quantile(TSG$VEST_score,.75)[[1]] + 1.5*IQR(TSG$VEST_score))
+#below <- which(TSG$VEST_score < quantile(TSG$VEST_score,.25)[[1]] - 1.5*IQR(TSG$VEST_score))
+
+#TSG <- TSG[-c(above,below),]
+
+#above <- which(TSG$Inactivating_mutations_fraction > quantile(TSG$Inactivating_mutations_fraction,.75)[[1]] + 1.5*IQR(TSG$Inactivating_mutations_fraction))
+#below <- which(TSG$Inactivating_mutations_fraction < quantile(TSG$Inactivating_mutations_fraction,.25)[[1]] - 1.5*IQR(TSG$Inactivating_mutations_fraction))
+
+#TSG <- TSG[-c(above,below),]
+
+#above <- which(TSG$Frameshift_indel_fraction > quantile(TSG$Frameshift_indel_fraction,.75)[[1]] + 1.5*IQR(TSG$One_Minus_S50_score_replication_timiTSG))
+#below <- which(TSG$Frameshift_indel_fraction < quantile(TSG$Frameshift_indel_fraction,.25)[[1]] - 1.5*IQR(TSG$One_Minus_S50_score_replication_timiTSG))
+
+#TSG <- TSG[-c(above,below),]
+
+
+new_data <- rbind(NG,TSG,OG)
+```
+
+
+## make equal partitions
+```{r}
+#limit <- 100
+#indexNG <- sample(which(class==0))[1:limit]
+#indexOG <- sample(which(class==1))[1:limit]
+#indexTSG <- sample(which(class==2))[1:limit]
+#train_ind <- c(indexNG,indexOG, indexTSG)
+#training_train = training[train_ind, ]
+#weights.train =weights[train_ind]
+#training_test = training[-train_ind, ]
+#weights.test =weights[-train_ind]
+
+#data_train = data[train_ind, ]
+#data_test = data[-train_ind,]
+```
+
+
+# Function for WCA
+```{r}
+get_wca <- function(pred, true)
+{
+  #get max score
+  max_score = sum(true == 0)*1 + sum(true == 1)*20 + sum(true==2)*20
+  
+  #get achieved score
+  score = sum((true == 0)&(pred == 0))*1 + sum((true == 1)&(pred == 1))*20+ sum((true == 2)&(pred == 2))*20
+  
+  #get wca
+  return (score/max_score)
+}
+```
+
+# Cassandra used this one: Logistic
+```{r}
+#logistic model
+cv.fun <- function(this.fold, data){
+  train <- filter(data, my.folds != this.fold)
+  validate <- filter(data, my.folds == this.fold)
+  total_train_points = table(train$class)[1] + 20*sum(table(train$class)[2:3]) %>%as.integer()
+  model_weights<- c(ifelse(train$class == 0,1/total_train_points,20/total_train_points))
+  
+  lr_model = multinom(class ~ 
+                  H3K79me2_height
+                + N_LOF 
+                + BioGRID_log_degree
+                + VEST_score
+                #+ RVIS_percentile
+                #+ log_gene_length
+                #+ Polyphen2
+                + ncGERP
+                + One_Minus_S50_score_replication_timing
+                #+MGAentropy
+                #+Broad_H3K36me3_percentage
+                #+ intolerant_pNull
+                #+ Gene_age
+                #+Canyon_genebody_hypermethylation
+                #+Inactivating_mutations_fraction
+                #+Broad_H4K20me1_percentage
+                #+Frameshift_indel_fraction
+                #+Inactivating_mutations_fraction
+                #+H3K4me2_height
+                #+Gene_body_hypomethylation_in_cancer
+                #+H3K4me2_width
+                , data = train,
+                weights = model_weights)
+
+  
+  preds = predict(lr_model, validate)
+  preds = as.integer(preds)
+  preds = preds-1
+  testError <- table(preds, validate$class)
+  #testError
+  #get posterior probabilities
+  #probs = predict_data$posterior
+  #print(head(probs))
+  wca = get_wca(preds, validate$class)
+  return(wca)
+
+}
+```
+
+
+#Training and validating the model (Pick one of these to run, b/c I called them all the same name )
+```{r}
+#logistic model
+cv.fun <- function(this.fold, data){
+  train <- filter(data, my.folds != this.fold)
+  validate <- filter(data, my.folds == this.fold)
+  total_train_points = table(train$class)[1] + 20*sum(table(train$class)[2:3]) %>%as.integer()
+  model_weights<- c(ifelse(train$class == 0,1/total_train_points,20/total_train_points))
+  
+  lr_model = multinom(class ~ 
+                  H3K79me2_height
+                + N_LOF 
+                + BioGRID_log_degree
+                + VEST_score
+                + RVIS_percentile
+                , data = train,
+                weights = model_weights)
+
+  
+  preds = predict(lr_model, validate)
+  preds = as.integer(preds)
+  preds = preds-1
+  #testError <- table(preds, validate$class)
+
+  wca = get_wca(preds, validate$class)
+  return(wca)
+
+}
+```
+
+## Re-doing exploratory Analysis with balanced dataset
+```{r}
+attach(training_train)
+for (feat in names(training_train)[41:60])
+#for (feat in vars_to_keep)
+{
+  if (feat != 'class')
+  {
+    p = ggplot(data = training_train, aes_string(classfactor, y=feat)) + 
+  geom_boxplot()
+    print(p)
+  }
+}
+#S50_score_replication_timing, Exon_Cons, N_Missense, N_LOF, N_Splice
+#TSG: H3K4me3_height,H3K4me2_height, H3K79me2_height, H4K20me1_width
+#NG: RVIS_percentile, ncGERP
+```
+
+```{r}
+#logistic model lotssss
+cv.fun <- function(this.fold, data){
+  train <- filter(data, my.folds != this.fold)
+  validate <- filter(data, my.folds == this.fold)
+  total_train_points = table(train$class)[1] + 20*sum(table(train$class)[2:3]) %>%as.integer()
+  model_weights<- c(ifelse(train$class == 0,1/total_train_points,20/total_train_points))
+  
+  lr_model = multinom(class ~ .
+                  -  Silent_KB_Ratio 
+                  - N_Missense
+#                  - N_LOF
+                  - N_Splice
+                  - Missense_KB_Ratio
+                  - LOF_KB_Ratio
+                  - Missense_Entropy
+                  - LOF_TO_Silent_Ratio
+                  - Splice_TO_Silent_Ratio
+                  - Missense_TO_Silent_Ratio
+#                  - Missense_Damaging_TO_Missense_Benign_Ratio
+#                  - LOF_TO_Benign_Ratio
+                  - Splice_TO_Benign_Ratio 
+                  - Missense_TO_Benign_Ratio
+                  - Missense_Damaging_TO_Benign_Ratio
+                  - Polyphen2
+                  - LOF_TO_Total_Ratio 
+                  - Missense_TO_Total_Ratio
+                  - Splice_TO_Total_Ratio
+                  - LOF_TO_Missense_Ratio
+                  - Silent_fraction
+                  - Nonsense_fraction
+                  - Missense_fraction
+#                  - Recurrent_missense_fraction
+#                  - Frameshift_indel_fraction
+#                  - Inframe_indel_fraction
+#                  - Lost_start_and_stop_fraction
+#                  - Inactivating_mutations_fraction
+#                  - NonSilent_TO_Silent_Ratio
+#                  - log_gene_length
+                  - CDS_length
+#                  - CNA_deletion 
+#                  - CNA_amplification
+#                  - Exon_Cons
+#                  - MGAentropy
+#                  - S50_score_replication_timing
+                  - One_Minus_S50_score_replication_timing
+#                  -VEST_score
+#                  -Gene_expression_Z_score
+#                  -Gene_expression_Minus_Z_score
+#                  -Cell_proliferation_rate_CRISPR_KD
+#                    -Minus_Cell_proliferation_rate_CRISPR_KD
+#                    -Super_Enhancer_percentage
+#                    -BioGRID_clossness
+#                    -BioGRID_log_degree
+#                    -Promoter_hypermethylation_in_cancer
+#                    -Promoter_hypomethylation_in_cancer
+#                    -Gene_body_hypermethylation_in_cancer
+#                    -Gene_body_hypomethylation_in_cancer
+#                    -Canyon_genebody_hypermethylation
+#                    -intolerant_pLI
+#                    -intolerant_pRec
+#                    -intolerant_pNull
+#                    -Synonymous_Zscore
+#                    -Missense_Zscore
+#                    - pLOF_Zscore
+#                    -dN_to_dS_ratio
+#                    -GDI 
+#                    -RVIS_percentile
+#                    -ncRVIS
+#                    -ncGERP
+#                    -Gene_age
+                    -FamilyMemberCount
+#                    -Length_H3K4me3
+#                    -Broad_H3K4me3_percentage
+#                    -H3K4me3_height
+#                    -H3K4me2_width
+#                    -Broad_H3K4me2_percentage
+#                    -Broad_H3K4me1_percentage
+#                    -H3K4me1_height
+#                    -H3K36me3_width
+#                    -Broad_H3K36me3_percentage
+#                    -H3K36me3_height
+#                    -H3K27ac_width
+#                    -Broad_H3K27ac_percentage
+#                    -H3K27ac_height
+                    -H3K27me3_width
+                    -Broad_H3K27me3_percentage
+                    -H3K27me3_height
+                    -H3K9me3_width
+                    -Broad_H3K9me3_percentage
+                    -H3K9me3_height
+                    -H3K9ac_width
+                    -Broad_H3K9ac_percentage
+                    -H3K9ac_height
+                    -H3K9me2_width
+                    -Broad_H3K9me2_percentage
+                    -H3K9me2_height
+                    -H3K79me2_width 
+#                    -Broad_H4K20me1_percentage
+#                    -H4K20me1_height
+                    -class
+                    -classfactor
+                , train, weights = model_weights
+                )
+
+  
+  preds = predict(lr_model, validate)
+  preds = as.integer(preds)
+  preds = preds-1
+  #testError <- table(preds, validate$class)
+
+  wca = get_wca(preds, validate$class)
+  return(wca)
+
+}
+```
+
+##LDA model
+```{r}
+#lda model
+cv.fun <- function(this.fold, data){
+  train <- filter(data, my.folds != this.fold)
+  validate <- filter(data, my.folds == this.fold)
+  #total_train_points = table(train$class)[1] + 20*sum(table(train$class)[2:3]) %>%as.integer()
+  #model_weights<- c(ifelse(train$class == 0,1/total_train_points,20/total_train_points))
+  
+  lda.model = lda(class ~ 
+                  H3K79me2_height
+                + N_LOF 
+                + BioGRID_log_degree
+                + VEST_score
+                + RVIS_percentile
+                , data = train)
+
+  
+  predictions = predict(lda.model, validate)
+  preds = as.integer(predictions$class)
+  preds = preds-1
+  #testError <- table(preds, validate$class)
+  #testError
+
+  wca = get_wca(preds, validate$class)
+  return(wca)
+
+}
+```
+
+
+```{r}
+#lda model lots
+cv.fun <- function(this.fold, data){
+  train <- filter(data, my.folds != this.fold)
+  validate <- filter(data, my.folds == this.fold)
+  #total_train_points = table(train$class)[1] + 20*sum(table(train$class)[2:3]) %>%as.integer()
+  #model_weights<- c(ifelse(train$class == 0,1/total_train_points,20/total_train_points))
+  
+  lda.model = lda(class ~ 
+                  H3K79me2_height
+                + N_LOF 
+                + BioGRID_log_degree
+                + VEST_score
+                + RVIS_percentile
+                , data = train)
+
+  
+  predictions = predict(lda.model, validate)
+  preds = as.integer(predictions$class)
+  preds = preds-1
+  #testError <- table(preds, validate$class)
+  #testError
+
+  wca = get_wca(preds, validate$class)
+  return(wca)
+
+}
+```
+
+##QDA Model
+```{r}
+#qda model
+cv.fun <- function(this.fold, data){
+  train <- filter(data, my.folds != this.fold)
+  validate <- filter(data, my.folds == this.fold)
+  #total_train_points = table(train$class)[1] + 20*sum(table(train$class)[2:3]) %>%as.integer()
+  #model_weights<- c(ifelse(train$class == 0,1/total_train_points,20/total_train_points))
+  
+  lda.model = qda(class ~ 
+                  H3K79me2_height
+                + N_LOF 
+                + BioGRID_log_degree
+                + VEST_score
+                + RVIS_percentile
+                , data = train)
+
+  
+  predictions = predict(lda.model, validate)
+  preds = as.integer(predictions$class)
+  preds = preds-1
+  #testError <- table(preds, validate$class)
+  #testError
+
+  wca = get_wca(preds, validate$class)
+  return(wca)
+
+}
+```
+
+
+##Iterate through n iterations of k fold cv
+```{r}
+set.seed(1)
+n = 1 #n iterations of k fold cv
+for(i in 1:n) {
+  #partition the data
+  k = 5 #how many folds we want
+  data <- mutate(new_data,
+                   my.folds = sample(1:k,
+                                     size = nrow(new_data),
+                                     replace = TRUE))
+  wca.values <- sapply(seq_len(k),
+                     FUN = cv.fun,
+                     data = new_data) #%>% mean()
+  print(wca.values)
+  print(mean(wca.values))
+}
+```
+
+[1] 0.8168663 0.7539887 0.7358283 0.8134041 0.7405281
+[1] 0.7721231
+
+[1] 0.7411554 0.7645260 0.8329032 0.8435374 0.7515593
+[1] 0.7867363
+
+
+
+# Vary the Threshold (can't get this to work :(
+
+```{r}
+#try several threshold values
+thresh_vals = seq(0,1,0.01)
+wca_vals = rep(0, length(thresh_vals)) #weighted Classification accuracy?
+names(wca_vals) = thresh_vals
+
+for (i in 1:length(thresh_vals))
+{
+  t = thresh_vals[i]
+  
+  #get posterior probability of being in class 1
+  c1_probs = probs[,2]
+  preds = predict_data$class
+  #set prediction to 1 if posterior probablity exceeds threshold
+  preds[c1_probs > t] = 1
+  
+  #compute wca
+  wca = get_wca(preds, train$class)
+  wca_vals[i] = wca
+}
+
+plot(thresh_vals, wca_vals, type="l", xlab="thresh", ylab="WCA")
+```
+
+
+# Create test set
+```{r}
+train = new_data
+total_train_points = table(train$class)[1] + 20*sum(table(train$class)[2:3]) %>%as.integer()
+model_weights<- c(ifelse(train$class == 0,1/total_train_points,20/total_train_points))
+  
+  model = multinom(class ~ 
+                  H3K79me2_height
+                  # H3K4me2_height
+                + N_LOF 
+                + BioGRID_log_degree
+                + VEST_score
+                + RVIS_percentile
+                #+ log_gene_length
+                #+ Polyphen2
+                #+ ncGERP
+                #+ One_Minus_S50_score_replication_timing
+                #+Frameshift_indel_fraction
+                #+Gene_body_hypomethylation_in_cancer
+                #+H3K4me2_width
+                , data = train,
+                weights = model_weights)
+
+  training <- predict(model,data)
+  probs <- predict(model,train,"probs")
+table(training,data$class)
+get_wca(training,data$class)
+#probs <- training$posterior
+
+  
+#actually predicting for the test set
+testing = predict(model, test)
+predictions = cbind(test$id, testing) %>% as.data.frame()
+names(predictions) <- c("id", "class") #for some reason the values added by one
+predictions$class = predictions$class - 1
+
+#creating csv file to turn in
+#write.csv(predictions, "predictions15.csv", row.names = FALSE)
+```

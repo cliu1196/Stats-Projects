@@ -1,0 +1,399 @@
+---
+title: "AllTheCode"
+output: pdf_document
+---
+
+# load packages
+```{r,message=F}
+# feature exploration engineering
+library(tidyverse) # ggplot, dplyr
+library(lubridate) # month()
+library(gridExtra) # grid.arrange()
+library(caret) # dummyVars()
+# subset selection
+library(glmnet) # lasso
+library(randomForest) # for checking importance()
+library(coefplot) # extract.coef()
+# model
+library(xgboost)
+```
+
+# load data
+```{r,message=F}
+train <- read_csv('training.csv')
+test <- read_csv('test.csv')
+```
+
+# preprocessing
+## creating high levels for Channel Features
+```{r}
+attach(train)
+train$Num_Subscribers_Base_high <- as.integer(Num_Subscribers_Base_low == 0 & Num_Subscribers_Base_low_mid == 0 & Num_Subscribers_Base_mid_high == 0)
+train$Num_Views_Base_high <- as.integer(Num_Views_Base_low == 0 & Num_Views_Base_low_mid == 0 & Num_Views_Base_mid_high == 0)
+train$avg_growth_high <- as.integer(avg_growth_low == 0 & avg_growth_low_mid == 0 & avg_growth_mid_high == 0)
+train$count_vids_high <- as.integer(count_vids_low == 0 & count_vids_low_mid == 0 & count_vids_mid_high == 0)
+detach(train)
+attach(test)
+test$Num_Subscribers_Base_high <- as.integer(Num_Subscribers_Base_low == 0 & Num_Subscribers_Base_low_mid == 0 & Num_Subscribers_Base_mid_high == 0)
+test$Num_Views_Base_high <- as.integer(Num_Views_Base_low == 0 & Num_Views_Base_low_mid == 0 & Num_Views_Base_mid_high == 0)
+test$count_vids_high <- as.integer(count_vids_low == 0 & count_vids_low_mid == 0 & count_vids_mid_high == 0)
+test$avg_growth_high <- as.integer(avg_growth_low == 0 & avg_growth_low_mid == 0 & avg_growth_mid_high == 0)
+detach(test)
+```
+## converting datetime to numeric (and time-based features)
+```{r}
+# split PublishedDate into date and time
+train <- train %>% separate(PublishedDate,c("PublishedDate","PublishedTime"),sep = " ")
+test <- test %>% separate(PublishedDate,c("PublishedDate","PublishedTime"),sep = " ")
+train$PublishedDate <- strptime(train$PublishedDate, "%m/%d/%Y")
+train$PublishedTime <- strptime(train$PublishedTime, "%H:%M")
+test$PublishedDate <- strptime(test$PublishedDate, "%m/%d/%Y")
+test$PublishedTime <- strptime(test$PublishedTime, "%H:%M")
+
+# convert time to mins since midnight (numeric)
+MinsSince1 <- as.integer(train$PublishedTime - min(train$PublishedTime))/60 # store as minutes
+train <- cbind(MinsSince1,train)
+MinsSince1 <- as.integer(test$PublishedTime - min(test$PublishedTime))/60 # store as minutes
+test <- cbind(MinsSince1,test)
+# and date to days since first day (numeric)
+DaysSince1 <- as.integer(train$PublishedDate - min(train$PublishedDate))/86400 # store as days
+train <- cbind(DaysSince1,train)
+DaysSince1 <- as.integer(test$PublishedDate - min(test$PublishedDate))/86400 # store as days
+test <- cbind(DaysSince1,test)
+
+# creat hour bins (4 hours per bin)
+train$bin_hour <- as.factor(train$MinsSince1 %/% 240)
+test$bin_hour <- as.factor(test$MinsSince1 %/% 240)
+# one-hot encode hour bins
+dmy <- dummyVars(" ~ bin_hour", data = train)
+trsf <- data.frame(predict(dmy, newdata = train))
+train <- cbind(train,trsf)
+dmy <- dummyVars(" ~ bin_hour", data = test)
+trsf <- data.frame(predict(dmy, newdata = test))
+test <- cbind(test,trsf)
+
+# create month
+train$month <-  as.factor(month(as.Date(train$PublishedDate)))
+test$month <-  as.factor(month(as.Date(test$PublishedDate)))
+# one-hot encode month
+dmy <- dummyVars(" ~ month", data = train)
+trsf <- data.frame(predict(dmy, newdata = train))
+train <- cbind(train,trsf)
+dmy <- dummyVars(" ~ month", data = test)
+trsf <- data.frame(predict(dmy, newdata = test))
+test <- cbind(test,trsf)
+train$month <-  as.integer(train$month)
+test$month <-  as.integer(test$month)
+
+# day of week
+train$day_of_week <- weekdays(as.Date(train$PublishedDate))
+test$day_of_week <- weekdays(as.Date(test$PublishedDate))
+# one hot encode DoW
+dmy <- dummyVars(" ~ day_of_week", data = train)
+trsf <- data.frame(predict(dmy, newdata = train))
+train <- cbind(train,trsf)
+dmy <- dummyVars(" ~ day_of_week", data = test)
+trsf <- data.frame(predict(dmy, newdata = test))
+test <- cbind(test,trsf)
+```
+## creating title features
+```{r}
+# avg word length
+train$avg_word_length <- train$num_chars/train$num_words
+test$avg_word_length <- test$num_chars/test$num_words
+# number of non-stopwords
+train$num_non_stopwords <- train$num_words - train$num_stopwords
+test$num_non_stopwords <- test$num_words - test$num_stopwords
+# proportion of non-stopwords
+train$p_non_stopwords <- train$num_non_stopwords/train$num_words
+test$p_non_stopwords <- test$num_non_stopwords/test$num_words
+# proportion of digit chars
+train$p_digit_chars <- train$num_digit_chars/train$num_chars 
+test$p_digit_chars <- test$num_digit_chars/test$num_chars
+# whether a title has a word with multiple capital letters
+train$all_cap <- as.integer(train$num_uppercase_chars > train$num_uppercase_words) # (more uppercase chars than words means one word has multiple capitals)
+test$all_cap <- as.integer(test$num_uppercase_chars > test$num_uppercase_words)
+```
+## converting some punctuation to binary
+the only punctuation predictors in our final model were: punc_num_at punc_num_bar_bi and punc_num_com
+```{r}
+# had some difficulties with special characters, so renamed them
+train <- train %>% rename(`punc_num_fs` = "punc_num_/",
+                          `punc_num_bs` = "punc_num_\\",
+                          `punc_num_col` = "punc_num_:",
+                          `punc_num_bar` = "punc_num_|",
+                          `punc_num_exc` = "punc_num_!",
+                          `punc_num_num` = "punc_num_#",
+                          `punc_num_pls` = "punc_num_+",
+                          `punc_num_par_l` = "punc_num_(",
+                          `punc_num_par_r` = "punc_num_)",
+                          `punc_num_at` = "punc_num_@",
+                          `punc_num_eql` = "punc_num_=",
+                          `punc_num_q` = "punc_num_?",
+                          `punc_num_dol` = "punc_num_$",
+                          `punc_num_pct` = "punc_num_%",
+                          `punc_num_com` = "punc_num_,",
+                          `punc_num_semi` = "punc_num_;",
+                          `punc_num_dash` = "punc_num_-",
+                          `punc_num_dot` = "punc_num_.",
+                          `punc_num_brk_l` = "punc_num_[",
+                          `punc_num_crl_l` = "punc_num_{",
+                          `punc_num_brk_r` = "punc_num_]",
+                          `punc_num_crl_r` = "punc_num_}",
+                          `punc_num_leq` = "punc_num_<",
+                          `punc_num_geq` = "punc_num_>",
+                          `punc_num_crt` = "punc_num_^",
+                          `punc_num_and` = "punc_num_&",
+                          `punc_num_dquo` = 'punc_num_"',
+                          `punc_num_squo` = "punc_num_'",
+                          `punc_num_bktk` = "punc_num_`",
+                          `punc_num_ast` = "punc_num_*",
+                          `punc_num_tld` = "punc_num_~"
+                          )
+# names(train)[235]
+test <- test %>% rename(`punc_num_fs` = "punc_num_/",
+                        `punc_num_bs` = "punc_num_\\",
+                        `punc_num_col` = "punc_num_:",
+                        `punc_num_bar` = "punc_num_|",
+                        `punc_num_exc` = "punc_num_!",
+                        `punc_num_num` = "punc_num_#",
+                        `punc_num_pls` = "punc_num_+",
+                        `punc_num_par_l` = "punc_num_(",
+                        `punc_num_par_r` = "punc_num_)",
+                        `punc_num_at` = "punc_num_@",
+                        `punc_num_eql` = "punc_num_=",
+                        `punc_num_q` = "punc_num_?",
+                        `punc_num_dol` = "punc_num_$",
+                        `punc_num_pct` = "punc_num_%",
+                        `punc_num_com` = "punc_num_,",
+                        `punc_num_semi` = "punc_num_;",
+                        `punc_num_dash` = "punc_num_-",
+                        `punc_num_dot` = "punc_num_.",
+                        `punc_num_brk_l` = "punc_num_[",
+                        `punc_num_crl_l` = "punc_num_{",
+                        `punc_num_brk_r` = "punc_num_]",
+                        `punc_num_crl_r` = "punc_num_}",
+                        `punc_num_leq` = "punc_num_<",
+                        `punc_num_geq` = "punc_num_>",
+                        `punc_num_crt` = "punc_num_^",
+                        `punc_num_and` = "punc_num_&",
+                        `punc_num_dquo` = 'punc_num_"',
+                        `punc_num_squo` = "punc_num_'",
+                        `punc_num_bktk` = "punc_num_`",
+                        `punc_num_ast` = "punc_num_*",
+                        `punc_num_tld` = "punc_num_~"
+                        )
+# we found these values by checking whether there was a significant difference
+# in growth_2_6 for the most common punctuations (so cutoff somewhat subjective)
+train$punc_num_bar_bi <- as.integer(train$punc_num_bar == 1) # eq 1 is opt
+test$punc_num_bar_bi <- as.integer(test$punc_num_bar == 1) # eq 1 is opt
+```
+## other features
+```{r}
+# convert duration to binary
+train$Duration2 <- as.integer(train$Duration > 6000)
+test$Duration2 <- as.integer(test$Duration > 6000)
+```
+
+# exploring features
+```{r}
+# subscribers
+p1 <- ggplot(train,aes(x=as.factor(Num_Subscribers_Base_low),y=growth_2_6)) + stat_summary(fun = "mean", geom = "col")
+p2 <- ggplot(train,aes(x=as.factor(Num_Subscribers_Base_low_mid),y=growth_2_6)) + stat_summary(fun = "mean", geom = "col")
+p3 <- ggplot(train,aes(x=as.factor(Num_Subscribers_Base_mid_high),y=growth_2_6)) + stat_summary(fun = "mean", geom = "col")
+p4 <- ggplot(train,aes(x=as.factor(Num_Subscribers_Base_high),y=growth_2_6)) + stat_summary(fun = "mean", geom = "col")
+grid.arrange(p1,p2,p3,p4,nrow=2)
+# average growth
+p1 <- ggplot(train,aes(x=as.factor(avg_growth_low),y=growth_2_6)) + stat_summary(fun = "mean", geom = "col")
+p2 <- ggplot(train,aes(x=as.factor(avg_growth_low_mid),y=growth_2_6)) + stat_summary(fun = "mean", geom = "col")
+p3 <- ggplot(train,aes(x=as.factor(avg_growth_mid_high),y=growth_2_6)) + stat_summary(fun = "mean", geom = "col")
+p4 <- ggplot(train,aes(x=as.factor(avg_growth_high),y=growth_2_6)) + stat_summary(fun = "mean", geom = "col")
+grid.arrange(p1,p2,p3,p4,nrow=2) # growth highest for high avg_growth
+# number of views on channel
+p1 <- ggplot(train,aes(x=as.factor(Num_Views_Base_low),y=growth_2_6)) + stat_summary(fun = "mean", geom = "col")
+p2 <- ggplot(train,aes(x=as.factor(Num_Views_Base_low_mid),y=growth_2_6)) + stat_summary(fun = "mean", geom = "col")
+p3 <- ggplot(train,aes(x=as.factor(Num_Views_Base_mid_high),y=growth_2_6)) + stat_summary(fun = "mean", geom = "col")
+p4 <- ggplot(train,aes(x=as.factor(Num_Views_Base_high),y=growth_2_6)) + stat_summary(fun = "mean", geom = "col")
+grid.arrange(p1,p2,p3,p4,nrow=2) # growth highest for Num_Views_Base_mid_high (too high is not good)
+# some other significant features
+ggplot(train,aes(x=num_words,y=growth_2_6)) + geom_point() + geom_smooth() # num words
+ggplot(train,aes(x=cnn_17,y=growth_2_6)) + geom_point() + geom_smooth() # cnn_17
+ggplot(train,aes(x=views_2_hours,y=growth_2_6)) + geom_point() + geom_smooth() # views_2_hours
+```
+## exploring our created features
+```{r}
+# numeric date and time, and binary duration
+ggplot(train,aes(x=MinsSince1,y=growth_2_6)) + geom_point() + geom_smooth()
+ggplot(train,aes(x=DaysSince1,y=growth_2_6)) + geom_point() + geom_smooth()
+ggplot(train,aes(x=as.factor(Duration2),y=growth_2_6)) + stat_summary(fun = "mean", geom = "col") #
+# day of week
+p1 <- ggplot(train) + geom_bar(aes(x=day_of_week)) # lower uploads on saturday and sunday, Mondays, Fridays highest
+p2 <- ggplot(train,aes(x=day_of_week,y=growth_2_6)) + stat_summary(fun = "mean", geom = "col")# geom_bar(stat="identity")
+# hour of day
+p3 <- ggplot(train) + geom_bar(aes(x=bin_hour)) # upload time dist
+p4 <- ggplot(train,aes(x=bin_hour,y=growth_2_6)) + stat_summary(fun = "mean", geom = "col")#+ geom_bar(stat="identity")
+grid.arrange(p1,p2,p3,p4,nrow=2)
+```
+
+# variable selection
+## first remove all non-numeric features
+```{r}
+train <- train %>% select(-c(PublishedDate,PublishedTime,day_of_week,bin_hour))
+# and move growth to last col
+train <- train %>% relocate(growth_2_6, .after = last_col())
+```
+## RFE subselect
+```{r}
+# the code takes hours to run
+# so we have commented it out
+
+# set.seed(22)
+# subsets <- c(30:40)
+# control <- rfeControl(functions=rfFuncs,
+#                       method="cv",
+#                       number=10,
+#                       verbose=T)
+# x <- train[,-which(colnames(train)=="growth_2_6")]
+# y <- as.matrix(train[,which(colnames(train)=="growth_2_6")])
+# rfe_sub <- rfe(x,y,
+#                sizes=subsets,
+#                rfeControl = control)
+# # final variables
+# paste(rfe_sub$optVariables,collapse = " ")
+```
+## RF importance
+```{r}
+# variables sorted by importance for Random Forest
+rf_fit = randomForest(growth_2_6~., data = train,
+                        ntree = 100,
+                        mtry= floor(ncol(train)/3),
+                        trControl = oob_control,
+                        importance=TRUE)
+incMSE_Imp <- importance(rf_fit)[,"%IncMSE"] %>% sort(decreasing = T)
+paste(names(incMSE_Imp[incMSE_Imp >= 1]),collapse=" ")
+plot(rf_fit)
+```
+## lasso subselect
+```{r}
+X_train = model.matrix(growth_2_6~., train)
+y_train = train$growth_2_6
+
+lasso_fit <- cv.glmnet(X_train,y_train,data = train, family = "gaussian", alpha = 1, #lambda = 0.00208, # selected by cv.glmnet 
+                     standardize = TRUE)
+lasso_coeffs <- extract.coef(lasso_fit) %>% arrange(desc(abs(Value)))
+paste(lasso_coeffs$Coefficient[1:93],collapse = " ")
+```
+## final set of predictors chosen from above 3 methods
+```{r}
+subset <- unlist(strsplit("avg_growth_high avg_growth_low avg_growth_low_mid avg_growth_mid_high bin_hour.0 cnn_10 cnn_12 cnn_17 cnn_19 cnn_25 cnn_68 cnn_86 cnn_88 cnn_89 count_vids_high count_vids_low count_vids_low_mid DaysSince1 Duration hog_454 mean_blue mean_green mean_pixel_val mean_red MinsSince1 num_chars num_non_stopwords Num_Subscribers_Base_high Num_Subscribers_Base_low_mid Num_Subscribers_Base_mid_high num_uppercase_chars Num_Views_Base_high Num_Views_Base_mid_high num_words p_non_stopwords punc_num_at punc_num_bar punc_num_bar_bi punc_num_com views_2_hours"," "))
+train <- train[c(subset,"growth_2_6")]
+```
+
+# creating model
+## Split train and test
+```{r}
+set.seed(22)
+train_index <- createDataPartition(train$growth_2_6, p = 0.7, 
+          list = FALSE)
+train <- train[train_index,]
+valid <- train[-train_index,]
+dim(train)
+dim(valid)
+```
+## Format data for XGBoost
+```{r}
+# xgboost requires data as matrix, and response separated from predictors
+trainm <- train %>% dplyr::select(-c(growth_2_6)) %>% as.matrix()
+train_label <- as.matrix(train[,"growth_2_6"])
+train_matrix <- xgb.DMatrix(data = as.matrix(trainm),label = train_label)
+
+# do same for valid
+validm <- valid %>% dplyr::select(-growth_2_6) %>% as.matrix()
+valid_label <- as.matrix(valid[,"growth_2_6"])
+valid_matrix <- xgb.DMatrix(data = as.matrix(validm),label = valid_label)
+```
+## Parameter tuning through cv
+```{r}
+watchlist <- list(train = train_matrix, test = valid_matrix)
+set.seed(22)
+best_param = list()
+best_RMSE = Inf
+best_RMSE_index = 0
+
+for (iter in 1:100){
+  xgb_params <- list("objective" = "reg:squarederror",
+                   "eval_metric" = "rmse",
+                   "eta" = runif(1,0.01,0.3), # learning rate: sample 1 between 0.01 and 0.3
+                   "lambda" = runif(1,1,2), # (default 1) larger lambda -> less overfit
+                   "gamma"=runif(1,0,0.2), # (default 0) similar to lambda 
+                   "subsample"=runif(1,0.6,0.9), # fraction of observations to sample per tree
+                   "colsample_bytree"=runif(1,0.5,0.8), # simliar to mtry in RF (but proportion)
+                   "min_child_weight"=sample(1:40, 1) # higher values -> less overfit
+                   )
+  seed.number = sample.int(10000, 1)[[1]] # also set random seed
+  set.seed(seed.number)
+  cv.nround = 100 # need to cv on enough rounds too
+  cv.nfold = 5
+  xgb_cv <- xgb.cv(params = xgb_params, 
+                 data = train_matrix, 
+                 nrounds = cv.nround, 
+                 nfold = cv.nfold, 
+                 early_stopping_rounds = 8, # stop if rmse does not decrease in 8 rounds
+                 maximize = F, # minimizing RMSE
+                 verbose=F)
+  min_RMSE = min(xgb_cv$evaluation_log[, test_rmse_mean]) # find minumum RMSE of n rounds
+  min_RMSE_index = which.min(xgb_cv$evaluation_log[, test_rmse_mean]) # index of min RMSE
+  
+  if (min_RMSE < best_RMSE) {
+      best_RMSE = min_RMSE
+      best_RMSE_index = min_RMSE_index
+      best_seednumber = seed.number
+      best_param = xgb_params
+  }
+  if(iter %% 5 == 0){
+    print(paste("Completed iteration ", iter))
+    print(paste("Stopped at ", best_RMSE_index))
+    print(paste("Current best RMSE ", best_RMSE))
+  }
+}
+best_seednumber
+best_RMSE_index # number of rounds with best RMSE
+best_param # best parameter values for that round
+```
+## Create model with tuned parameters
+```{r}
+set.seed(best_seednumber)
+xgb_fit <- xgb.train(data=train_matrix, 
+                params=best_param, 
+                nrounds=500,
+                watchlist = watchlist)
+```
+## Variable importance
+```{r}
+xgb.plot.shap(data=trainm,model=xgb_fit,top_n=5)
+```
+## Validate
+```{r}
+valid_p <- predict(xgb_fit,valid_matrix)
+xgb_RMSE <- RMSE(valid_p, valid$growth_2_6)
+xgb_RMSE # validation RMSE
+valid_preds <- data.frame("obs"=valid$growth_2_6, "pred"=valid_p)
+head(valid_preds,10) # check predictions
+```
+## Predict on Test
+```{r}
+# format test for XGB
+test <- test[subset]
+testm <- as.matrix(test)
+dtest <- xgb.DMatrix(data = testm)
+# make prediction
+preds <- predict(xgb_fit,newdata = dtest)
+df <- data.frame("id" = test_id, "growth_2_6" = preds)
+head(df)
+# check distribution of predictions
+ggplot(df) + geom_histogram(aes(x=growth_2_6))
+```
+## Write to csv
+```{r}
+write.csv(df,"sub_4f.csv", row.names = FALSE)
+```

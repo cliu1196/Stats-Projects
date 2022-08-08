@@ -1,0 +1,189 @@
+---
+title: "kaggle funcs"
+author: "Cassandra Tai"
+date: "11/5/2020"
+output: pdf_document
+---
+
+## Load necessary libraries
+```{r, warning = FALSE, message = FALSE}
+#library(ggplot2)
+library(dplyr)
+#library(reshape2)
+#library(caret)
+library(boot)
+#library(readxl)
+library(MASS) # for LDA and QDA
+library(nnet) #for more than 2 response values logistic
+```
+
+## Read in data
+```{r}
+data <- read.csv("training.csv", header = TRUE)
+test <- read.csv("test.csv", header = TRUE) 
+```
+
+
+```{r}
+## Getting rid of outliers
+## NOTE: we tried a lot of different things on the same file, and was unable to completely replicate the results we got
+## NOTE: commented out code reflects that there were no outliers there
+
+#creating dataset for each class to delete predictors
+NG <- data[which(data$class == 0),]
+OG <- data[which(data$class == 1),]
+TSG <- data[which(data$class == 2),]
+
+##For NG
+above <- which(NG$H3K79me2_height > quantile(NG$H3K79me2_height,.75)[[1]] + 2*IQR(NG$H3K79me2_height))
+#below <- which(NG$H3K79me2_height < quantile(NG$H3K79me2_height,.25)[[1]] - 1.5*IQR(NG$H3K79me2_height))
+NG <- NG[-c(above),]
+
+above <- which(NG$N_LOF > quantile(NG$N_LOF,.75)[[1]] + 1.5*IQR(NG$N_LOF))
+#below <- which(NG$N_LOF < quantile(NG$N_LOF,.25)[[1]] - 1.5*IQR(NG$N_LOF))
+NG <- NG[-c(above),]
+
+above <- which(NG$VEST_score > quantile(NG$VEST_score,.75)[[1]] + 2*IQR(NG$VEST_score))
+#below <- which(NG$VEST_score < quantile(NG$VEST_score,.25)[[1]] - 1.5*IQR(NG$VEST_score))
+
+NG <- NG[-c(above),]
+
+
+above <- which(NG$ncGERP > quantile(NG$ncGERP,.75)[[1]] + 2*IQR(NG$ncGERP))
+NG <- NG[-c(above),]
+
+
+#NG <- NG[-c(above,below),]
+
+#For OG
+above <- which(OG$H3K79me2_height > quantile(OG$H3K79me2_height,.75)[[1]] + 1.5*IQR(OG$H3K79me2_height))
+below <- which(OG$H3K79me2_height < quantile(OG$H3K79me2_height,.25)[[1]] - 1.5*IQR(OG$H3K79me2_height))
+
+OG <- OG[-c(above,below),]
+
+above <- which(OG$N_LOF > quantile(OG$N_LOF,.75)[[1]] + 1.5*IQR(OG$N_LOF))
+below <- which(OG$N_LOF < quantile(OG$N_LOF,.25)[[1]] - 1.5*IQR(OG$N_LOF))
+
+OG <- OG[-c(above,below),]
+
+#above <- which(OG$VEST_score > quantile(OG$VEST_score,.75)[[1]] + 1.5*IQR(OG$VEST_score))
+#below <- which(OG$VEST_score < quantile(OG$VEST_score,.25)[[1]] - 1.5*IQR(OG$VEST_score))
+
+#OG <- OG[-c(above,below),]
+
+
+
+
+#For TSG
+#above <- which(TSG$H3K79me2_height > quantile(TSG$H3K79me2_height,.75)[[1]] + 1.5*IQR(TSG$H3K79me2_height))
+#below <- which(TSG$H3K79me2_height < quantile(TSG$H3K79me2_height,.25)[[1]] - 1.5*IQR(TSG$H3K79me2_height))
+#TSG <- TSG[-c(above,below),]
+
+#above <- which(TSG$N_LOF > quantile(TSG$N_LOF,.75)[[1]] + 1.5*IQR(TSG$N_LOF))
+#below <- which(TSG$N_LOF < quantile(TSG$N_LOF,.25)[[1]] - 1.5*IQR(TSG$N_LOF))
+
+#TSG <- TSG[-c(above,below),]
+
+#above <- which(TSG$VEST_score > quantile(TSG$VEST_score,.75)[[1]] + 1.5*IQR(TSG$VEST_score))
+#below <- which(TSG$VEST_score < quantile(TSG$VEST_score,.25)[[1]] - 1.5*IQR(TSG$VEST_score))
+
+#TSG <- TSG[-c(above,below),]
+
+#create new dataset without a selection of outliers
+new_data <- rbind(NG,TSG,OG)
+```
+
+
+# Function for WCA
+```{r}
+get_wca <- function(pred, true)
+{
+  #get max score
+  max_score = sum(true == 0)*1 + sum(true == 1)*20 + sum(true==2)*20
+  
+  #get achieved score
+  score = sum((true == 0)&(pred == 0))*1 + sum((true == 1)&(pred == 1))*20+ sum((true == 2)&(pred == 2))*20
+  
+  #get wca
+  return (score/max_score)
+}
+```
+
+
+```{r}
+# Training Model: logistic regression
+
+cv.fun <- function(this.fold, data){
+  #split data set into train and validate
+  train <- filter(data, my.folds != this.fold)
+  validate <- filter(data, my.folds == this.fold)
+  # create weigths
+  total_train_points = table(train$class)[1] + 20*sum(table(train$class)[2:3]) %>%as.integer()
+  model_weights<- c(ifelse(train$class == 0,1/total_train_points,20/total_train_points))
+  
+  # train model
+  lr_model = multinom(class ~ 
+                  H3K79me2_height
+                + N_LOF 
+                + BioGRID_log_degree
+                + VEST_score
+                + log_gene_length
+                + ncGERP
+                , data = train,
+                weights = model_weights)
+
+  # calculate the WCA metric
+  preds = predict(lr_model, validate)
+  preds = as.integer(preds)
+  preds = preds-1
+  wca = get_wca(preds, validate$class)
+  return(wca)
+
+}
+```
+
+
+```{r CV}
+# Iterate through n iterations of k fold cv
+set.seed(1)
+n = 1 #n iterations of k fold cv
+for(i in 1:n) {
+  k = 5 #how many folds we want
+  new_data <- mutate(new_data,
+                   my.folds = sample(1:k,
+                                     size = nrow(new_data),
+                                     replace = TRUE))
+  wca.values <- sapply(seq_len(k),
+                     FUN = cv.fun,
+                     data = new_data) #%>% mean()
+  #print(wca.values)
+  print(mean(wca.values))
+}
+# average WCA value we got was 0.795983 
+```
+
+```{r}
+# To create test set
+train = new_data
+total_train_points = table(train$class)[1] + 20*sum(table(train$class)[2:3]) %>%as.integer()
+model_weights<- c(ifelse(train$class == 0,1/total_train_points,20/total_train_points))
+  
+  model = multinom(class ~ 
+                     H3K79me2_height
+                   + N_LOF
+                   + BioGRID_log_degree
+                   + VEST_score
+                   + log_gene_length
+                   + ncGERP
+                   , data = train,
+                   weights = model_weights)
+
+#actually predicting for the test set
+testing = predict(model, test)
+predictions = cbind(test$id, testing) %>% as.data.frame()
+names(predictions) <- c("id", "class") #for some reason the values added by one
+predictions$class = predictions$class - 1
+
+#creating csv file to turn in
+#write.csv(predictions, "predictions18.csv", row.names = FALSE) #uncomment this to create the predictions csv!
+```

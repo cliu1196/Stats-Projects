@@ -1,0 +1,128 @@
+---
+title: "DataExplore"
+output: pdf_document
+---
+
+# Load packages
+```{r, message=F}
+library(tidyverse)
+library(caret)
+library(corrplot)
+library(gridExtra) # grid.arrange
+```
+
+# 1a) Load Data
+```{r,message=F}
+train <- read_csv('training.csv')
+test <- read_csv('test.csv')
+samp <- read_csv('sample.csv')
+```
+
+# 1d) Check for NA - none
+```{r}
+# sum(is.na(train))
+```
+
+#1c) Some Ft. Engineering
+```{r}
+# split PubDate into date and time
+train <- train %>% separate(PublishedDate,c("PublishedDate","PublishedTime"),sep = " ")
+test <- test %>% separate(PublishedDate,c("PublishedDate","PublishedTime"),sep = " ")
+train$PublishedDate <- strptime(train$PublishedDate, "%m/%d/%Y")
+train$PublishedTime <- strptime(train$PublishedTime, "%H:%M")
+test$PublishedDate <- strptime(test$PublishedDate, "%m/%d/%Y")
+test$PublishedTime <- strptime(test$PublishedTime, "%H:%M")
+# head(train)
+# head(test)
+# head(samp)
+```
+
+```{r}
+# rating from 0 to 10
+range(samp$growth_2_6) 
+# dates range from 4/11 to 9/1
+range(train$PublishedDate)
+range(train$PublishedTime)
+range(test$PublishedDate)
+range(test$PublishedTime)
+# dims
+dim(train)
+dim(test)
+```
+
+## Create numeric ver. of Pub Date and Pub Time (days since first and mins since midnight)
+```{r}
+# arithmetic converts date to seconds
+DaysSince1 <- as.integer(train$PublishedDate - min(train$PublishedDate))/86400 # store as days
+train <- cbind(DaysSince1,train)
+MinsSince1 <- as.integer(train$PublishedTime - min(train$PublishedTime))/60 # store as minutes
+train <- cbind(MinsSince1,train)
+DaysSince1 <- as.integer(test$PublishedDate - min(test$PublishedDate))/86400 # store as days
+test <- cbind(DaysSince1,test)
+MinsSince1 <- as.integer(test$PublishedTime - min(test$PublishedTime))/60 # store as minutes
+test <- cbind(MinsSince1,test)
+
+# head(train)
+```
+
+```{r}
+# glimpse(train)# all data are numeric except PublishedDate
+```
+
+
+```{r}
+# first remove id and non-numeric dates
+num_train <- train[,-c(3,4,5)]
+dim(num_train)
+# also some variables are all 0, only keep those that are not all 0
+num_train <-num_train[,colSums(num_train) != 0]
+dim(num_train)
+# remove min and max colors, all 0 or 255, only nead mean
+```
+
+```{r}
+# write.csv(num_train,"num_preds.csv", row.names = FALSE)
+```
+
+# 2) Get corr matrix for numeric data
+```{r}
+multicorr <- cor(num_train, use="complete.obs") # corr matrix between all predictors
+sum(is.na(multicorr))
+dim(multicorr)
+
+all_mc <- as.vector(multicorr)
+ggplot() + geom_histogram(aes(x=all_mc))
+```
+
+```{r}
+# remove predictors with correlation with e/o above 0.75?
+keep <- rowSums(abs(multicorr) >= 0.75) <= 1 # 1 because each row has the = 1 corr with self
+n_keep <- rowSums(abs(multicorr) >= 0.75) > 1
+uncorr <- multicorr[keep,keep] 
+dim(uncorr) 
+colinear <- multicorr[c(head(n_keep,-1),T),c(head(n_keep,-1),T)] # include growth to see which high corr vars to keep
+dim(colinear) # removed 126
+```
+
+
+
+# 3) Subset selection
+
+## check which have highest corr with growth
+```{r}
+# highest corr among all preds
+multicorr_p <- multicorr[,248] %>% data.frame() %>% arrange(desc(abs(.)))
+# highest corr among <= 0.75 corr preds
+uncorr_p <- uncorr[,122] %>% data.frame() %>% arrange(desc(abs(.)))
+# highest corr among > 0.75 corr preds
+colinear_p <- colinear[,127] %>% data.frame() %>% arrange(desc(abs(.)))
+```
+
+## make corr plot among top 6 colinear vars
+```{r}
+top6 <- colinear %>% data.frame() %>%  arrange(desc(abs(growth_2_6))) %>% head(7) %>% rownames()
+corrplot.mixed(colinear[top6,top6]) # choose cnn 17, cnn 89, and num_chars (drop cnn 12, cnn 25, and num_words)
+```
+
+Initial guess at predictors: 
+Num_Views_Base_mid_high + avg_growth_low + avg_growth_low_mid + count_vids_mid_high + doc2vec_17 + Num_Views_Base_low + Num_Subscribers_Base_mid_high + num_uppercase_chars	+ Num_Views_Base_low_mid + cnn_17 + cnn_89 + num_chars

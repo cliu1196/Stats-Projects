@@ -1,0 +1,398 @@
+---
+title: "Charles' Choices (based on Boxplots)"
+author: "Charles Liu (304804942)"
+date: "10/31/2020"
+output: pdf_document
+---
+
+# Packages & Set-Up
+```{r, warning=FALSE, message=FALSE}
+library(readr)
+library(ggplot2)
+library(dplyr)
+library(reshape2)
+library(caret)
+library(boot)
+library(readxl)
+#library(MASS)
+#library(ISLR)
+#library(class)
+#library(mclust)
+#library(e1071)
+library(MLeval)
+#library(pander)
+#library(lares)
+#library(rminer)
+library(nnet) #for more than 2 response values
+setwd(getwd())
+```
+
+# Set up further
+```{r}
+training <- read.csv("training.csv", header = TRUE)
+test <- read.csv("test.csv", header = TRUE)
+sample <- read.csv("sample.csv", header = TRUE)
+traintags <- c("NG","OG","TSG")[as.integer(training$class)+1]
+training$classfactor <- factor(traintags, levels=c("NG","OG","TSG"))
+```
+
+
+
+
+# Looking at (variables 51 - 99)
+```{r}
+# YES
+plot(training$classfactor, training$intolerant_pLI)# Y
+plot(training$classfactor, training$intolerant_pRec)# Y
+plot(training$classfactor, training$intolerant_pNull)# Y
+plot(training$classfactor, training$Missense_Zscore)# Y
+plot(training$classfactor, training$pLOF_Zscore)# Y
+plot(training$classfactor, training$RVIS_percentile)# Y
+plot(training$classfactor, training$ncGERP)# Y
+plot(training$classfactor, training$Gene_age)# Y
+plot(training$classfactor, training$Length_H3K4me3)# Y
+plot(training$classfactor, training$Broad_H3K4me3_percentage)# Y
+plot(training$classfactor, training$H3K4me3_height)# Y
+plot(training$classfactor, training$H3K4me2_width)# Y
+plot(training$classfactor, training$Broad_H3K4me2_percentage)# Y
+plot(training$classfactor, training$H3K4me2_height)# Y
+plot(training$classfactor, training$H3K4me1_width)# Y
+plot(training$classfactor, training$Broad_H3K4me1_percentage)# Y
+plot(training$classfactor, training$H3K36me3_width)# Y
+plot(training$classfactor, training$Broad_H3K36me3_percentage)# Y
+plot(training$classfactor, training$H3K27ac_width)# Y
+plot(training$classfactor, training$Broad_H3K27ac_percentage)# Y
+plot(training$classfactor, training$H3K27ac_height)# Y
+plot(training$classfactor, training$H3K9ac_width)# Y
+plot(training$classfactor, training$Broad_H3K9ac_percentage)# Y
+plot(training$classfactor, training$H3K9ac_height)# Y
+plot(training$classfactor, training$Broad_H3K9me2_percentage)# Y
+plot(training$classfactor, training$H3K79me2_width)# Y
+plot(training$classfactor, training$Broad_H3K79me2_percentage)# Y
+plot(training$classfactor, training$H3K79me2_height)# Y
+plot(training$classfactor, training$H4K20me1_width)# Y
+plot(training$classfactor, training$Broad_H4K20me1_percentage)# Y
+plot(training$classfactor, training$H4K20me1_height)# Y
+
+
+
+
+
+
+
+
+# MAYBE
+plot(training$classfactor, training$Gene_body_hypomethylation_in_cancer)# M
+plot(training$classfactor, training$Gene_body_hypomethylation_in_cancer)# M
+plot(training$classfactor, training$GDI)# M
+plot(training$classfactor, training$H3K4me1_height)# M
+plot(training$classfactor, training$H3K36me3_height)# M
+plot(training$classfactor, training$H3K27me3_height)# M
+plot(training$classfactor, training$H3K9me2_height)# M
+plot(training$classfactor, training$Broad_H3K27me3_percentage)# M
+```
+
+
+
+# Setting up the pairs (Charles -> 51-99)
+## Pairs for YES
+```{r, message=FALSE, warning=FALSE}
+# YES
+
+# (30 Variables that are viable) intolerant_pLI, intolerant_pRec, intolerant_pNull, Missense_Zscore, pLOF_Zscore, RVIS_percentile, ncGERP, Gene_age, Length_H3K4me3, Broad_H3K4me3_percentage, H3K4me3_height, H3K4me2_width, Broad_H3K4me2_percentage, H3K4me2_height, H3K4me1_width, Broad_H3K4me1_percentage, H3K36me3_width, Broad_H3K36me3_percentage, H3K27ac_width, Broad_H3K27ac_percentage, H3K27ac_height, H3K9ac_width, Broad_H3K9ac_percentage, H3K9ac_height, Broad_H3K9me2_percentage, H3K79me2_width, Broad_H3K79me2_percentage, H3K79me2_height, H4K20me1_width, Broad_H4K20me1_percentage, H4K20me1_height
+attach(training)
+
+pairs(~
+ intolerant_pLI+
+ intolerant_pRec+
+ intolerant_pNull+
+ Missense_Zscore+
+ pLOF_Zscore
+) # Too linear!
+
+pairs(~
+ RVIS_percentile+
+ ncGERP+
+ Gene_age+
+ Length_H3K4me3+
+ Broad_H3K4me3_percentage
+) # ncGERP, Gene_age, Length_H3K4me3
+
+pairs(~
+ H3K4me3_height+
+ H3K4me2_width+
+ Broad_H3K4me2_percentage+
+ H3K4me2_height+
+ H3K4me1_width
+) # Broad_H3K4me2_percentage, H3K4me1_width
+
+pairs(~
+ Broad_H3K4me1_percentage+
+ H3K36me3_width+
+ Broad_H3K36me3_percentage+
+ H3K27ac_width+
+ Broad_H3K27ac_percentage
+) # Broad_H3K36me3_percentage, Broad_H3K27ac_percentage
+
+pairs(~
+ H3K27ac_height+
+ H3K9ac_width+
+ Broad_H3K9ac_percentage+
+ H3K9ac_height+
+ Broad_H3K9me2_percentage
+) # H3K9ac_height, Broad_H3K9me2_percentage
+
+pairs(~
+ H3K79me2_width+
+ Broad_H3K79me2_percentage+
+ H3K79me2_height+
+ H4K20me1_width+
+ Broad_H4K20me1_percentage+
+ H4K20me1_height
+) # Too linear
+```
+
+## Pairs for MAYBE
+```{r}
+# MAYBE
+
+# (8 possible viable) Gene_body_hypomethylation_in_cancer, Gene_body_hypomethylation_in_cancer, GDI, H3K4me1_height, H3K36me3_height, H3K27me3_height, H3K9me2_height, Broad_H3K27me3_percentage
+
+pairs(~
+Gene_body_hypomethylation_in_cancer+
+Gene_body_hypomethylation_in_cancer+
+GDI+
+H3K4me1_height
+)
+
+pairs(~
+H3K36me3_height+
+H3K27me3_height+
+H3K9me2_height+
+Broad_H3K27me3_percentage
+)
+```
+
+
+
+
+
+# Setting up Training & Testing data
+```{r}
+limit <- 130
+indexNG <- sample(which(training$class==0))[1:limit]
+indexOG <- sample(which(training$class==1))[1:limit]
+indexTSG <- sample(which(training$class==2))[1:limit]
+trainindex <- c(indexNG,indexOG, indexTSG)
+train_training <- training[trainindex,]
+train_test <- training[-trainindex,]
+train_control <- trainControl(method="boot", number = 5, 
+                              classProbs = TRUE, 
+                              savePredictions = TRUE)
+```
+
+
+
+# Charles' Choices on Variables
+## LR (8 variables used! -> mixed)
+```{r}
+LDAfit <- train(classfactor ~ 
+                  N_LOF + 
+                  VEST_score + 
+                  ncGERP + 
+                  BioGRID_log_degree + 
+                  Broad_H3K36me3_percentage + 
+                  H3K79me2_height +
+                  H3K4me1_height +
+                  log_gene_length
+                 ,
+               data = train_training, 
+               method = "lda", 
+               preProc = c("center", "scale"), 
+               trControl = train_control) 
+LDAfit$results[2]
+
+# w/ all 30 predictors (YES) -> 0.7111789
+# current highest: 0.7600375 (accuracy = 0.7581782)
+
+
+
+# Prediction & Points (Kaggle)
+LDA.train.train <- predict(LDAfit, train_training)
+trainError <- table(LDA.train.train, train_training$class)
+trainError
+points <- trainError[1,1] + 20* (trainError[2,2] + trainError[3,3])
+totalPoints <- table(train_training$class)[[1]] + 20 * (table(train_training$class)[[2]] + table(train_training$class)[[3]])
+points/totalPoints
+```
+
+
+#actually predicting for the test set
+```{r}
+LDA.test = predict(LDAfit, test, type="class")
+predictions = cbind(test$id, glm.test) %>% as.data.frame()
+names(predictions) <- c("id", "class") #for some reason the values added by one
+predictions$class = predictions$class - 1
+
+#creating csv file to turn in
+write.csv(predictions, "predictions.csv", row.names = FALSE)
+```
+
+
+
+# ACTUAL ONE TO CREATE CSV
+```{r}
+test <- read.csv('test.csv', header = TRUE)
+LDA.pred <- predict(LDAfit, newdata = test)
+predictions.LDA <- cbind(test$id, LDA.pred) %>% as.data.frame()
+names(predictions.LDA) <- c("id", "class")
+predictions.LDA$class <- predictions.LDA$class-1
+
+#creating csv file to turn in
+write.csv(predictions.LDA, "predictions.csv", row.names = FALSE)
+
+```
+
+
+
+
+
+
+
+
+# Richard's Pairs
+```{r}
+pairs(
+~ Missense_Entropy
++ Polyphen2
++ Nonsense_fraction
++ CDS_length
++ Exon_Cons
++ MGAentropy
++ S50_score_replication_timing
++ Super_Enhancer_percentage
++ BioGRID_clossness
+)
+
+pairs(
+ ~N_Missense
++ N_Splice
++ Missense_Entropy
++ Polyphen2
++ LOF_TO_Total_Ratio
+)
+
+pairs(
+~Silent_fraction
++ Nonsense_fraction
++ log_gene_length
++ CDS_length
++ Exon_Cons
+)
+
+pairs(
+~MGAentropy
++ S50_score_replication_timing
++ VEST_score 
++ Super_Enhancer_percentage
++ BioGRID_clossness
+)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+## Check for other items
+```{r}
+# Create a function for misclassifications accuracy
+misclassfication_model <- function(prediction, observation, n) {
+  misclass_risk <- sum((as.integer(prediction) -
+                              as.integer(observation))^2)/nrow(n)
+  return(misclass_risk)
+}
+
+# KNN prediction
+predKNN <- predict(KNNfit, newdata = test)
+CM_KNN <- confusionMatrix(data = predKNN, reference = test$class)
+misclass_KNN <- misclassfication_model(prediction = KNNfit$pred$pred, 
+                       observation = KNNfit$pred$obs, 
+                       n = test)
+
+# Logistic Regression prediction
+predLR <- predict(LRfit, newdata = test)
+CM_LR <- confusionMatrix(data = predLR, reference = test$class)
+misclass_LR <- misclassfication_model(prediction = LRfit$pred$pred, 
+                       observation = LRfit$pred$obs, 
+                       n = test)
+
+```
+
+
+
+# Other Method (featurePlot)
+```{r}
+# 51-62
+attach(training)
+x <- training[,51:62]
+y <- training$classfactor
+scales <- list(x=list(relation="free"), y=list(relation="free"))
+featurePlot(x=x, y=y, plot="density", scales=scales)
+# 54, 56, 59*, 61*, 62*
+```
+
+```{r}
+# 63 - 74
+attach(training)
+x <- training[,63:74]
+y <- training$classfactor
+scales <- list(x=list(relation="free"), y=list(relation="free"))
+featurePlot(x=x, y=y, plot="density", scales=scales)
+# 64, 66*, 69*, 71*, 72*, 74*
+```
+
+```{r}
+# 75 - 86
+attach(training)
+x <- training[,75:86]
+y <- training$classfactor
+scales <- list(x=list(relation="free"), y=list(relation="free"))
+featurePlot(x=x, y=y, plot="density", scales=scales)
+# 77*, 78*, 80*, 81, 82, 83, 84, 86
+```
+
+```{r}
+# 87 - 98
+attach(training)
+x <- training[,87:98]
+y <- training$classfactor
+scales <- list(x=list(relation="free"), y=list(relation="free"))
+featurePlot(x=x, y=y, plot="density", scales=scales)
+# 90, 91*, 92
+```
+
+```{r}
+# 99
+attach(training)
+x <- training[,99]
+y <- training$classfactor
+scales <- list(x=list(relation="free"), y=list(relation="free"))
+featurePlot(x=x, y=y, plot="density", scales=scales)
+# NONE
+```
+
+
+

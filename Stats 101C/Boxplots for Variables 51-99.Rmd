@@ -1,0 +1,154 @@
+---
+title: "Boxplots for Variables 51-99"
+author: "Charles Liu (304804942)"
+date: "10/31/2020"
+output: pdf_document
+---
+
+# Packages & Set-Up
+```{r}
+library(readr)
+library(ggplot2)
+library(dplyr)
+library(reshape2)
+library(caret)
+library(boot)
+library(readxl)
+library(MLeval)
+library(MASS)
+library(ISLR)
+library(class)
+library(mclust)
+library(e1071)
+library(MLeval)
+library(nnet) #for more than 2 response values
+setwd(getwd())
+```
+
+
+# Set up further BUT DO INDIVIDUALLY TO AVOID CRASH
+```{r}
+training <- read.csv("training.csv", header = TRUE)
+test <- read.csv("test.csv", header = TRUE)
+sample <- read.csv("sample.csv", header = TRUE)
+traintags <- c("NG","OG","TSG")[as.integer(training$class)+1]
+training$classfactor <- factor(traintags, levels=c("NG","OG","TSG"))
+```
+
+
+
+
+# Looking at (variables 51 - 99)
+```{r}
+# names(training[51:99])
+par(mfrow = c(2,3))
+plot(training$classfactor, training$Gene_body_hypomethylation_in_cancer)# M
+plot(training$classfactor, training$Gene_body_hypomethylation_in_cancer)# M
+plot(training$classfactor, training$Canyon_genebody_hypermethylation)# N
+plot(training$classfactor, training$intolerant_pLI)# Y
+plot(training$classfactor, training$intolerant_pRec)# Y
+plot(training$classfactor, training$intolerant_pNull)# Y
+```
+
+```{r}
+par(mfrow = c(2,3))
+plot(training$classfactor, training$Synonymous_Zscore)# N
+plot(training$classfactor, training$Missense_Zscore)# Y
+plot(training$classfactor, training$pLOF_Zscore)# Y
+plot(training$classfactor, training$dN_to_dS_ratio)# N
+plot(training$classfactor, training$GDI)# M
+plot(training$classfactor, training$RVIS_percentile)# Y
+```
+
+```{r}
+par(mfrow = c(2,3))
+plot(training$classfactor, training$ncRVIS)# N
+plot(training$classfactor, training$ncGERP)# Y
+plot(training$classfactor, training$Gene_age)# Y
+plot(training$classfactor, training$FamilyMemberCount)# N
+plot(training$classfactor, training$Length_H3K4me3)# Y
+plot(training$classfactor, training$Broad_H3K4me3_percentage)# Y
+```
+
+```{r}
+par(mfrow = c(2,3))
+plot(training$classfactor, training$H3K4me3_height)# Y
+plot(training$classfactor, training$H3K4me2_width)# Y
+plot(training$classfactor, training$Broad_H3K4me2_percentage)# Y
+plot(training$classfactor, training$H3K4me2_height)# Y
+plot(training$classfactor, training$H3K4me1_width)# Y
+plot(training$classfactor, training$Broad_H3K4me1_percentage)# Y
+```
+
+```{r}
+par(mfrow = c(2,3))
+plot(training$classfactor, training$H3K4me1_height)# M
+plot(training$classfactor, training$H3K36me3_width)# Y
+plot(training$classfactor, training$Broad_H3K36me3_percentage)# Y
+plot(training$classfactor, training$H3K36me3_height)# M
+plot(training$classfactor, training$H3K27ac_width)# Y
+plot(training$classfactor, training$Broad_H3K27ac_percentage)# Y
+```
+
+```{r}
+par(mfrow = c(2,3))
+plot(training$classfactor, training$H3K27ac_height)# Y
+plot(training$classfactor, training$H3K27me3_width)# N
+plot(training$classfactor, training$Broad_H3K27me3_percentage)# M
+plot(training$classfactor, training$H3K27me3_height)# M
+plot(training$classfactor, training$H3K9me3_width)# N
+plot(training$classfactor, training$Broad_H3K9me3_percentage)# N
+```
+
+```{r}
+par(mfrow = c(2,3))
+plot(training$classfactor, training$H3K9me3_height)# N
+plot(training$classfactor, training$H3K9ac_width)# Y
+plot(training$classfactor, training$Broad_H3K9ac_percentage)# Y
+plot(training$classfactor, training$H3K9ac_height)# Y
+plot(training$classfactor, training$H3K9me2_width)# N
+plot(training$classfactor, training$Broad_H3K9me2_percentage)# Y
+```
+
+```{r}
+par(mfrow = c(2,3))
+plot(training$classfactor, training$H3K9me2_height)# M
+plot(training$classfactor, training$H3K79me2_width)# Y
+plot(training$classfactor, training$Broad_H3K79me2_percentage)# Y
+plot(training$classfactor, training$H3K79me2_height)# Y
+plot(training$classfactor, training$H4K20me1_width)# Y
+plot(training$classfactor, training$Broad_H4K20me1_percentage)# Y
+```
+
+```{r}
+par(mfrow = c(1,2))
+plot(training$classfactor, training$H4K20me1_height)# Y
+plot(training$classfactor, training$class)# N
+```
+
+
+
+# Richard's Choices!!!!
+```{r}
+# pairs(
+ ~N_Missense
++ N_Splice
++ Missense_Entropy
++ Polyphen2
++ LOF_TO_Total_Ratio
+)
+pairs(
+~Silent_fraction
++ Nonsense_fraction
++ log_gene_length
++ CDS_length
++ Exon_Cons
+)
+pairs(
+~MGAentropy
++ S50_score_replication_timing
++ VEST_score 
++ Super_Enhancer_percentage
++ BioGRID_clossness
+)
+```

@@ -1,0 +1,179 @@
+---
+title: "Models"
+output: pdf_document
+author: "Tyler Wu"
+---
+
+# Load packages
+```{r, message=F}
+library(tidyverse)
+library(caret)
+library(corrplot)
+library(gridExtra) # grid.arrange
+library(rattle) # fancy tree
+library(pls) # principal component regression
+library(randomForest) # tuneRF
+```
+
+# 1a) Load Data
+```{r}
+train <- read_csv("num_preds.csv")
+test <- read_csv("test2.csv")
+# head(test)
+```
+
+# 1b) Split validation
+```{r}
+train_index <- createDataPartition(train$growth_2_6, p = 0.7, 
+                                  list = FALSE)
+train <- train[train_index,]
+valid <- train[-train_index,] # We assume we have not seen this.
+head(train) # We assume that this is the data we get from our client.
+```
+
+# 1c) Transformations?
+
+
+# 2a) train_controls
+```{r}
+train_control <- trainControl(method="cv", number = 10,
+                              classProbs = FALSE, 
+                              savePredictions = TRUE)
+
+oob_train_control <- trainControl(method="oob", 
+                                  classProbs = FALSE, # no class probs for reg
+                                  savePredictions = TRUE)
+```
+
+# 2c) MODELS
+
+## predictor lists
+```{r}
+# init <- unlist(strsplit("growth_2_6 Num_Views_Base_mid_high + avg_growth_low + avg_growth_low_mid + count_vids_mid_high + doc2vec_17 + Num_Views_Base_low + Num_Subscribers_Base_mid_high + num_uppercase_chars	+ Num_Views_Base_low_mid + cnn_17 + cnn_89 + num_chars +
+# Num_Subscribers_Base_low_mid + cnn_10 + Num_Subscribers_Base_low + avg_growth_mid_high + doc2vec_10 + num_stopwords", " + "))
+# subtrain1 <- num_train[init]
+
+backward_sel <- unlist(strsplit("growth_2_6 DaysSince1 Duration hog_454 hog_492 hog_641 hog_716 hog_855 cnn_9 cnn_10 cnn_12 cnn_17 cnn_19 cnn_25 cnn_68 cnn_88 sd_pixel_val sd_red sd_blue doc2vec_2 doc2vec_13 punc_num_! punc_num_/ punc_num_: punc_num_| num_words num_stopwords num_uppercase_words Num_Subscribers_Base_low Num_Subscribers_Base_low_mid Num_Views_Base_low_mid Num_Views_Base_mid_high avg_growth_low avg_growth_low_mid avg_growth_mid_high count_vids_low_mid"," "))
+# backward_sel
+subtrain2 <- train[backward_sel]
+head(subtrain2)
+```
+
+## Ridge (close to 0)
+```{r}
+
+```
+
+## Lasso (exactly 0)
+```{r}
+
+```
+
+## Gradient Boost
+```{r}
+floor(sqrt(ncol(subtrain2))) # max interaction depth = 6
+gbmGrid <-expand.grid(interaction.depth = c(1, 3, 6),
+                    n.trees = (0:50)*50, # 0 to 250 trees
+                    shrinkage = seq(.0005, .05),
+                    n.minobsinnode = 10)
+gbmGrid
+```
+
+
+```{r}
+set.seed(22)
+gbm_fit <- train(growth_2_6~., data = subtrain2, 
+                 method = "gbm", 
+                 trControl = train_control,
+                 tuneGrid = gbmGrid,
+                 verbose = FALSE)
+gbm_fit
+```
+
+### Importance Plots
+```{r}
+
+```
+
+
+## Random Forest
+
+# use tuneRF to find best Mtry
+```{r}
+# best_mtry <- tuneRF(subtrain2[2:36],subtrain2$growth_2_6, stepFactor = 1.5, improve = 1e-5, ntree = 500)
+```
+
+```{r}
+rec_mtry <- 16 # best mtry
+# rec_mtry <- floor(ncol(num_train)/3) # /3 for regression
+tune_grid <- expand.grid(mtry=rec_mtry) # m must be less than number of predictors, DN how to specify ntree
+tune_grid
+set.seed(22)
+forest_fit <- train(growth_2_6~.,
+                 data = subtrain2, method = 'rf', tuneGrid = tune_grid,
+                 trControl = oob_train_control)# try with oob validation
+                 # trControl = train_control) # try with normal repeated cv
+print(forest_fit, digits = 2)
+```
+
+## PCR - let PCR do the variable selection
+```{r}
+#scale = T
+pcr_fit <- pcr(growth_2_6~.,data = subtrain2, scale = T, validation = "CV",ncomp=35) # scaling column of all 0s -> NaN
+summary(pcr_fit)
+```
+
+# 3a) Predict on valid
+
+## GBM
+```{r}
+valid_p <- predict(gbm_fit,valid)
+gbm_RMSE <- mean((valid$growth_2_6 - valid_p)^2)
+gbm_RMSE
+valid_preds <- data.frame("obs"=valid$growth_2_6, "pred"=valid_p)
+head(valid_preds)
+```
+
+
+## RF
+```{r}
+valid_p <- predict(forest_fit,valid)
+forest_RMSE <- mean((valid$growth_2_6 - valid_p)^2)
+forest_RMSE
+valid_preds <- data.frame("obs"=valid$growth_2_6, "pred"=valid_p)
+head(valid_preds)
+```
+
+## PCR
+```{r}
+valid_p <- predict(pcr_fit,valid)
+pcr_RMSE <- mean((valid$growth_2_6 - valid_p)^2)
+pcr_RMSE
+valid_preds <- data.frame("obs"=valid$growth_2_6, "pred"=valid_p)
+head(valid_preds)
+```
+
+# 3b) Predict test vars
+```{r}
+test_p <- predict(gbm_fit,test)
+# dim(test_p)
+# test_p <- test_p[,,35] # for pcr
+df <- data.frame("id" = test$id, "growth_2_6" = test_p)
+head(df)
+```
+
+# RF
+```{r}
+write.csv(df,"sub_1d.csv", row.names = FALSE)
+```
+
+# PCR
+```{r}
+write.csv(df,"sub_2.csv", row.names = FALSE)
+```
+
+#GBM
+```{r}
+write.csv(df,"sub_3.csv", row.names = FALSE)
+```
+

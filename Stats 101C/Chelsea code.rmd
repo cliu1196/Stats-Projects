@@ -1,0 +1,115 @@
+---
+title: "Final"
+author: "Chelsea Miao"
+date: "12/2/2020"
+output: pdf_document
+---
+
+```{r,message=FALSE}
+library(dplyr)
+library(caret)
+library(randomForest)
+```
+
+```{r}
+train <- read.csv("training.csv")
+test <- read.csv("test.csv")
+train <- train %>% select(-PublishedDate,-id)
+ID <- test$id
+test <- test %>% select(-PublishedDate,-id)
+```
+
+#split
+```{r}
+set.seed(1)
+training_rows <- sample(seq_len(nrow(train)), size = floor(0.70 * nrow(train)))
+train <- train[training_rows, ]
+valid <- train[-training_rows, ]
+```
+
+
+#get rid of near-zero variance predictors
+```{r}
+nzv <- nearZeroVar(train[,-ncol(train)])
+train_filt <- train[, -nzv]
+valid_filt <- valid[,-nzv]
+test_filt <- test[,-nzv]
+```
+
+#identify highly correlated predictors
+```{r}
+cors <- cor(train_filt[,-ncol(train_filt)])
+high_cor <- findCorrelation(cors, cutoff = .75)
+trainCor <- train_filt[,-high_cor]
+validCor <- valid_filt[,-high_cor]
+testCor <- test_filt[,-high_cor]
+```
+
+
+#make bagging model(BEST SO FAR)
+
+```{r}
+set.seed(1)
+bagging <- randomForest(growth_2_6~., data = trainCor,
+importance = T, mtry = ncol(trainCor)-1, ntree = 500)
+```
+
+```{r}
+print(bagging)
+```
+
+```{r}
+validations <- predict(bagging, validCor[,-ncol(validCor)])
+RMSE = RMSE(validations, validCor$growth_2_6)
+```
+
+#make PCA regression(NOT GOOD)
+
+```{r}
+pcr <- train(growth_2_6~., preProcess=c("center","scale","pca"),data = trainCor, method = "lm")
+```
+
+```{r}
+#print(pcr)
+validations <- predict(pcr, validCor[,-ncol(validCor)])
+RMSE = RMSE(validations, validCor$growth_2_6)
+```
+
+#make boosted model(warning:takes hella long to run)
+```{r}
+caretGrid <- expand.grid(interaction.depth=c(1, 3, 5), n.trees = 500,
+                   shrinkage=c(0.01, 0.001),
+                   n.minobsinnode=10)
+trainControl <- trainControl(method="cv", number=10)
+
+set.seed(99)
+gbm.caret <- train(growth_2_6~ ., data=trainCor, distribution="gaussian", method="gbm",
+              trControl=trainControl, verbose=FALSE, 
+              tuneGrid=caretGrid, metric="RMSE")
+```
+
+```{r}
+print(gbm.caret)
+```
+
+
+#predictions
+```{r}
+predictions <- predict(bagging,testCor)
+final <- data.frame("id" = ID, "growth_2_6" = predictions)
+```
+
+```{r}
+write.csv(final, 
+          "/Users/eustinakim/Desktop/Stats 101C/stats101c-lec4-final-competition/bagging1.csv",
+          row.names = FALSE)
+```
+
+
+
+
+
+
+
+
+

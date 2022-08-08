@@ -1,0 +1,332 @@
+---
+title: "B_Predictions_Charles"
+author: "Charles Liu (304804942)"
+date: "11/5/2020"
+output: pdf_document
+---
+
+# Packages & Set-Up
+```{r, warning=FALSE, message=FALSE}
+library(readr)
+library(ggplot2)
+library(dplyr)
+library(class)
+library(reshape2)
+library(caret)
+library(boot)
+library(readxl)
+library(MLeval)
+library(class)
+library(MASS)
+library(nnet) #for more than 2 response values
+setwd(getwd())
+```
+
+# Reading the Data (do it individually to avoid crashing!)
+```{r}
+training <- read.csv("training.csv", header = TRUE)
+test <- read.csv("test.csv", header = TRUE)
+sample <- read.csv("sample.csv", header = TRUE)
+```
+
+# Train / Test Split
+```{r}
+# 50% of data for train and 50% of data for test (since sampel size is large)
+train_size = floor(0.5 * nrow(training))
+
+#set the seed
+set.seed(1234)
+
+#get training indices
+train_ind = sample(seq_len(nrow(training)), size = train_size)
+data_train = training[train_ind, ]
+data_test = training[-train_ind, ]
+```
+
+# Function for WCA
+```{r}
+get_wca <- function(pred, true)
+{
+  #get max score
+  max_score = sum(true == 0)*1 + sum(true == 1)*20 + sum(true==2)*20
+  
+  #get achieved score
+  score = sum((true == 0)&(pred == 0))*1 + sum((true == 1)&(pred == 1))*20 + sum((true == 2)&(pred == 2))*20
+  
+  #get wca
+  return (score/max_score)
+}
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Fit an LDA (Attempt 1)
+```{r}
+#fit LDA
+lda_model = lda(class ~
+                  H3K79me2_height + 
+                  N_LOF + 
+                  Polyphen2 + 
+                  VEST_score + 
+                  BioGRID_log_degree + 
+                  ncGERP + 
+                  Broad_H3K36me3_percentage + 
+                  RVIS_percentile
+                , 
+                data = data_train)
+predict_data = predict(lda_model, data_test)
+
+#get posterior probabilities
+probs = predict_data$posterior
+
+print(head(probs))
+
+# WCA: 0.7023047 (all predictors)
+
+#get predictions and compute wca
+preds = predict_data$class
+wca = get_wca(preds, data_test$class)
+print(wca)
+```
+
+
+
+# Fit an LDA (Attempt 2)
+```{r}
+#fit LDA
+lda_model = lda(class ~
+                  # Richard's Choices
+                  CDS_length+ # valuable
+                  S50_score_replication_timing+ # removable
+                  Super_Enhancer_percentage+ 
+                  BioGRID_clossness+
+                  N_Missense+ # super valuable
+                  LOF_TO_Total_Ratio+
+                  VEST_score+ # super valuable
+
+                  # Charles' Choices (Yes)
+                  Missense_Zscore+ # valauble
+                  Broad_H3K4me3_percentage+ # removable?
+                  H3K36me3_width+ # super valuable
+                  Broad_H3K27ac_percentage+ # valuable
+                  Broad_H3K9ac_percentage+
+                  Broad_H3K79me2_percentage+
+                  
+                  H4K20me1_width+ # valuable
+                  
+                  Broad_H4K20me1_percentage+ # valuable
+
+                  # Charles' Choices (Maybe)
+                  Gene_body_hypomethylation_in_cancer # super valuable
+                , 
+                data = data_train)
+predict_data = predict(lda_model, data_test)
+
+#get posterior probabilities
+probs = predict_data$posterior
+
+print(head(probs))
+
+# Current WCA: 0.7272727 (all predictors currently -> 16)
+
+#get predictions and compute wca
+preds = predict_data$class
+wca = get_wca(preds, data_test$class)
+print(wca)
+```
+
+
+
+# Fit an LDA (Attempt 3)
+```{r}
+#fit LDA
+lda_model = lda(class ~
+                  CDS_length+ 
+                  S50_score_replication_timing+ 
+                  Super_Enhancer_percentage+ 
+                  BioGRID_clossness+
+                  N_Missense+ 
+                  LOF_TO_Total_Ratio+ 
+                  VEST_score+ 
+                  Missense_Zscore+ 
+                  Broad_H3K4me3_percentage+ 
+                  H3K36me3_width+ 
+                  Broad_H3K27ac_percentage+ 
+                  Broad_H3K9ac_percentage+
+                  Broad_H3K79me2_percentage+
+                  H4K20me1_width+ 
+                  Broad_H4K20me1_percentage+ 
+                  Gene_body_hypomethylation_in_cancer 
+                , 
+                data = data_train)
+predict_data = predict(lda_model, data_test)
+
+#get posterior probabilities
+probs = predict_data$posterior
+
+print(head(probs))
+
+# Current WCA: 0.7272727 (all predictors currently)
+
+#get predictions and compute wca
+preds = predict_data$class
+wca = get_wca(preds, data_test$class)
+print(wca)
+```
+
+
+
+
+
+
+
+
+# Fit a QDA
+```{r}
+#fit QDA
+qda_model = qda(class ~
+                  H3K79me2_height + 
+                  N_LOF + 
+                  Polyphen2 + 
+                  VEST_score + 
+                  BioGRID_log_degree + 
+                  log_gene_length + 
+                  ncGERP + 
+                  H3K4me1_height + 
+                  Broad_H3K36me3_percentage + 
+                  RVIS_percentile
+                ,
+                data = data_train)
+predict_data = predict(qda_model, data_test)
+
+#get posterior probabilities
+probs = predict_data$posterior
+print(head(probs))
+
+#get predictions and compute wca
+preds = predict_data$class
+wca = get_wca(preds, data_test$class)
+print(wca)
+```
+
+
+
+# Vary the Threshold
+```{r}
+#try several threshold values
+thresh_vals = seq(0,1,0.01)
+wca_vals = rep(0, length(thresh_vals))
+names(wca_vals) = thresh_vals
+
+for (i in 1:length(thresh_vals))
+{
+  t = thresh_vals[i]
+  
+  #get posterior probability of being in class 1
+  c1_probs = probs[,2]
+  preds = predict_data$class
+  
+  #set prediction to 1 if posterior probablity exceeds threshold
+  preds[c1_probs > t] = 1
+  
+  #compute wca
+  wca = get_wca(preds, data_test$class)
+  wca_vals[i] = wca
+}
+
+plot(thresh_vals, wca_vals, type="l", xlab="thresh", ylab="WCA")
+```
+
+
+
+# Fit KNN
+```{r}
+#fit KNN
+
+predictors = c(   'CDS_length', 
+                  'S50_score_replication_timing', 
+                  'Super_Enhancer_percentage', 
+                  'BioGRID_clossness',
+                  'N_Missense', 
+                  'LOF_TO_Total_Ratio', 
+                  'VEST_score', 
+                  'Missense_Zscore', 
+                  'Broad_H3K4me3_percentage', 
+                  'H3K36me3_width', 
+                  'Broad_H3K27ac_percentage', 
+                  'Broad_H3K9ac_percentage',
+                  'Broad_H3K79me2_percentage',
+                  'H4K20me1_width', 
+                  'Broad_H4K20me1_percentage', 
+                  'Gene_body_hypomethylation_in_cancer' )
+
+mu = apply(data_train[,predictors], 2, mean)
+dev = apply(data_train[,predictors], 2, sd)
+
+#normalize train data
+data_train[,predictors] = sweep(data_train[,predictors], 2, mu, '-')
+data_train[,predictors] = sweep(data_train[,predictors], 2, dev, '/')
+
+#normalize test data
+data_test[,predictors] = sweep(data_test[,predictors], 2, mu, '-')
+data_test[,predictors] = sweep(data_test[,predictors], 2, dev, '/')
+
+knn_model = knn(data_train[,predictors], data_test[,predictors], data_train$class, k=3, prob=TRUE)
+probs = attr(knn_model, "prob")
+
+wca = get_wca(knn_model, data_test$class)
+print(wca)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Creating the Predictions CSV
+```{r}
+test <- read.csv('test.csv', header = TRUE)
+LDA.pred <- predict(lda_model, newdata = test)
+predictions.LDA <- cbind(test$id, LDA.pred$class) %>% as.data.frame()
+names(predictions.LDA) <- c("id", "class")
+predictions.LDA$class <- predictions.LDA$class-1
+
+#creating csv file to turn in
+write.csv(predictions.LDA, "predictions.csv", row.names = FALSE)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

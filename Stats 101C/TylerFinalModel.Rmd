@@ -1,0 +1,118 @@
+---
+title: "TylerFinalModel"
+output: pdf_document
+---
+
+```{r, message=F}
+library(tidyverse) 
+library(caret)
+library(xgboost)
+```
+
+## Load data
+```{r,message=F}
+train <- read_csv("new_train.csv")
+test <- read_csv("new_test.csv")
+test_id <- test$id
+dim(train)
+```
+
+## Select vars
+```{r}
+# must use one-hot for xgb, so no punc_num_bar_bi  
+final_sub2 <- unlist(strsplit("avg_growth_low avg_growth_low_mid avg_growth_mid_high avg_growth_high cnn_10 cnn_86 cnn_17 cnn_89 Num_Subscribers_Base_low_mid cnn_25 Num_Views_Base_mid_high cnn_12 views_2_hours MinsSince1 cnn_68 Duration cnn_19 count_vids_low_mid punc_num_bar cnn_88 DaysSince1 count_vids_high Num_Subscribers_Base_mid_high num_words num_uppercase_chars num_chars punc_num_at mean_green Num_Subscribers_Base_high num_non_stopwords mean_pixel_val mean_red p_non_stopwords hog_454 punc_num_com bin_hour.0 Num_Views_Base_high count_vids_low mean_blue p_digit_chars sd_green hog_40 hog_657 sd_blue hog_499"," ")) 
+# sort(final_sub2)
+
+train <- train[c(final_sub2,"growth_2_6")]
+dim(train)
+head(train)
+```
+
+[Trees are immune to collinearity (only one of 2 collinear vars will be used on a split), so we don't need to remove vars as strictly and skip checking for collinearity]
+
+## Split train and test
+```{r}
+set.seed(22)
+train_index <- createDataPartition(train$growth_2_6, p = 0.7, 
+          list = FALSE)
+train <- train[train_index,]
+valid <- train[-train_index,]
+dim(train)
+dim(valid)
+```
+
+## Data Prep
+```{r}
+# xgboost requires data as matrix, and response separated from predictors
+trainm <- train %>% dplyr::select(-c(growth_2_6)) %>% as.matrix()
+train_label <- as.matrix(train[,"growth_2_6"])
+train_matrix <- xgb.DMatrix(data = as.matrix(trainm),label = train_label)
+
+# do same for valid
+validm <- valid %>% dplyr::select(-growth_2_6) %>% as.matrix()
+valid_label <- as.matrix(valid[,"growth_2_6"])
+valid_matrix <- xgb.DMatrix(data = as.matrix(validm),label = valid_label)
+```
+
+## Parameters
+```{r}
+# params
+xgb_params <- list("objective" = "reg:squarederror",
+                   "eval_metric" = "rmse",
+                   "eta" = 0.05, # smaller eta than default -> slower learning -> more robust
+                   "lambda" = 1.5) # larger lambda, more conservative, less overfitting
+watchlist <- list(train = train_matrix, test = valid_matrix)
+```
+
+# MODEL
+```{r}
+xgb_fit <- xgb.train(params = xgb_params,
+                     data = train_matrix,
+                     nrounds = 500,
+                     watchlist = watchlist) # like verbose = T
+```
+
+## Evaluation of Model
+```{r}
+xgb.plot.shap(data=trainm,model=xgb_fit,top_n=5)
+```
+#validate on XGB
+```{r}
+valid_p <- predict(xgb_fit,valid_matrix)
+xgb_RMSE <- RMSE(valid_p, valid$growth_2_6)
+# forest_RMSE <- mean((valid$growth_2_6 - valid_p)^2)
+xgb_RMSE
+valid_preds <- data.frame("obs"=valid$growth_2_6, "pred"=valid_p)
+head(valid_preds)
+```
+
+Check which observations are off by the most (i.e. > 1 diff in obs and preds)
+```{r}
+valid_preds[abs(valid_preds$obs - valid_preds$pred) > 1,] # lots of observations off by > 1 (140 for RF)
+```
+
+# PREDICT TEST
+```{r}
+test <- test[final_sub2]
+testm <- as.matrix(test)
+dtest <- xgb.DMatrix(data = testm)
+```
+
+```{r}
+preds <- predict(xgb_fit,newdata = dtest)
+# preds <- exp(preds) # reverse log transform
+# test_p <- as.vector(test_p)
+df <- data.frame("id" = test_id, "growth_2_6" = preds)
+# names(df)[2] <- "growth_2_6"
+head(df)
+```
+
+# Check distribution of predictions
+```{r}
+ggplot(df) + geom_histogram(aes(x=growth_2_6))
+```
+
+# output csv
+```{r}
+write.csv(df,"sub_4b.csv", row.names = FALSE)
+```

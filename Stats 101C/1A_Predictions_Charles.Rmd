@@ -1,0 +1,156 @@
+---
+title: "A_Predictions_Charles"
+author: "Charles Liu (304804942)"
+date: "11/5/2020"
+output: pdf_document
+---
+
+# Packages & Set-Up
+```{r, warning=FALSE, message=FALSE}
+library(readr)
+library(ggplot2)
+library(dplyr)
+library(reshape2)
+library(caret)
+library(boot)
+library(readxl)
+library(MLeval)
+library(nnet) #for more than 2 response values
+setwd(getwd())
+```
+
+
+
+# Reading the Data (do it individually to avoid crashing!)
+```{r}
+training <- read.csv("training.csv", header = TRUE)
+test <- read.csv("test.csv", header = TRUE)
+sample <- read.csv("sample.csv", header = TRUE)
+traintags <- c("NG","OG","TSG")[as.integer(training$class)+1]
+training$classfactor <- factor(traintags, levels=c("NG","OG","TSG"))
+```
+
+
+
+# Setting up Training & Testing data
+```{r}
+limit <- 130
+indexNG <- sample(which(training$class==0))[1:limit]
+indexOG <- sample(which(training$class==1))[1:limit]
+indexTSG <- sample(which(training$class==2))[1:limit]
+trainindex <- c(indexNG,indexOG, indexTSG)
+train_training <- training[trainindex,]
+train_test <- training[-trainindex,]
+train_control <- trainControl(method="boot", number = 5, 
+                              classProbs = TRUE, 
+                              savePredictions = TRUE) # used Boot method
+```
+
+
+
+# Creating our model with results & scores
+```{r}
+LDAfit <- train(classfactor ~ 
+                     Polyphen2
+                  + VEST_score
+                  + Missense_Entropy
+                  + Nonsense_fraction
+                  + CDS_length
+                  + Exon_Cons
+                  + MGAentropy
+                  + S50_score_replication_timing
+                  + Super_Enhancer_percentage
+                  + BioGRID_clossness
+                  + BioGRID_log_degree # adding Cassandra's predictors
+                  + N_LOF 
+                  + Polyphen2 
+                  + H3K79me2_width 
+                  + Gene_age 
+                  + Promoter_hypermethylation_in_cancer # Cassandra's predictors end
+                  + intolerant_pNull
+                  + Missense_Zscore
+                  + pLOF_Zscore
+                  + RVIS_percentile
+                  + ncGERP
+                  + Length_H3K4me3
+                  + H3K4me3_height
+                  + H3K4me1_height
+                 ,
+               data = train_training, 
+               method = "lda", 
+               preProc = c("center", "scale"), 
+               trControl = train_control) 
+LDAfit$results[2]
+
+# w/ all 30 predictors (YES) -> 0.7111789
+# current highest: 0.7600375 (accuracy = 0.7581782)
+
+
+
+# Prediction & Points (Kaggle)
+LDA.train.train <- predict(LDAfit, train_training)
+trainError <- table(LDA.train.train, train_training$class)
+trainError
+points <- trainError[1,1] + 20* (trainError[2,2] + trainError[3,3])
+totalPoints <- table(train_training$class)[[1]] + 20 * (table(train_training$class)[[2]] + table(train_training$class)[[3]])
+points/totalPoints
+```
+
+
+
+# Writing the CSV file for Kaggle
+```{r}
+test <- read.csv('test.csv', header = TRUE)
+LDA.pred <- predict(LDAfit, newdata = test)
+predictions.LDA <- cbind(test$id, LDA.pred) %>% as.data.frame()
+names(predictions.LDA) <- c("id", "class")
+predictions.LDA$class <- predictions.LDA$class-1
+
+#creating csv file to turn in
+write.csv(predictions.LDA, "predictions.csv", row.names = FALSE)
+```
+
+
+
+# Creating our model with results & scores
+```{r}
+LDAfit <- train(classfactor ~ 
+                  VEST_score
+                  + Missense_Entropy
+                  + CDS_length
+                  + MGAentropy
+                  + S50_score_replication_timing
+                  + BioGRID_log_degree
+                  + N_LOF 
+                  + H3K79me2_width
+                  + Promoter_hypermethylation_in_cancer 
+                  + Missense_Zscore
+                  + ncGERP
+                  + H3K4me3_height
+                  + H3K4me1_height
+                 ,
+               data = train_training, 
+               method = "lda", 
+               preProc = c("center", "scale"), 
+               trControl = train_control) 
+LDAfit$results[2]
+
+# w/ all 30 predictors (YES) -> 0.7111789
+# current highest: 0.7600375 (accuracy = 0.7581782)
+
+# current score: 0.779925 (accuracy = 0.7638685) (all of Richard's variables 24 from dummy (1))
+
+# Prediction & Points (Kaggle)
+LDA.train.train <- predict(LDAfit, train_training)
+trainError <- table(LDA.train.train, train_training$class)
+trainError
+points <- trainError[1,1] + 20* (trainError[2,2] + trainError[3,3])
+totalPoints <- table(train_training$class)[[1]] + 20 * (table(train_training$class)[[2]] + table(train_training$class)[[3]])
+points/totalPoints
+```
+
+
+
+
+
+

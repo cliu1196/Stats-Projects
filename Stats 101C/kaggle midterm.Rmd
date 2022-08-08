@@ -1,0 +1,311 @@
+---
+title: "kaggle midterm"
+author: "Cassandra Tai"
+date: "10/27/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+## Load necessary libraries
+```{r, warning = FALSE, message = FALSE}
+library(ggplot2)
+library(dplyr)
+library(reshape2)
+library(caret)
+library(boot)
+library(readxl)
+library(nnet) #for more than 2 response values
+```
+
+##set working directory 
+```{r}
+setwd("C:\\Users\\cassa\\Documents\\UCLA\\Fourth Year\\Stats 101C\\Midterm Project") #change it to your own!
+```
+
+
+## Read in descriptions (but I think it's easier to read if you actually open up the Excel file) 
+```{r}
+#descr <- read_excel("Feature_description.xlsx")
+```
+
+
+## Read in data
+```{r}
+training <- read.csv("training.csv", header = TRUE)
+test <- read.csv("test.csv", header = TRUE) 
+
+dim(training)
+```
+
+Let's first get the names of all the variables
+```{r}
+names(training)
+```
+
+
+
+## Clean Data and Exploratory Analysis
+### Checking for NAs
+```{r}
+na_vec <- c()
+for (i in 1:ncol(training))
+{
+  na_vec[i] <- sum(is.na(training[,i]))
+}
+na_vec
+#There are no NA's!!
+```
+There's no NAs! But a question to ask now is that are 0's actually 0, or replaced for by NA?
+
+### Proportion of each class
+```{r}
+table(training$class)
+
+table(training$class)[[1]] / nrow(training)
+table(training$class)[[2]] / nrow(training)
+table(training$class)[[3]] / nrow(training)
+
+```
+So our data is very skewed: almost 90% of our training data is in class 0, which are neutral genes, and the Oncogenes (1) and Tumer Suppressor genes (2) only take up about 5% each. (I forgot what we need to do for this).  
+Because of this, we need to use some resampling techniques.
+Ideas:  
+- duplicate observations from minority class
+- use bootstrapping WITH replacement    
+- undersample from the majority class
+
+
+### Brief summary (broke them into parts)
+```{r}
+
+#what i look for is seeing how far the mean and median are in comparison to its spread
+summary(training[,1:10])  #LOF_KB_Ratio and Missense_Entropy and LOF_TO_Silent_Ratio seem skewed to the right
+summary(training[,11:20]) #LOF_TO_Benign_Ratio and Splice_TO_Benign_Ratio seem slightly skewed to the right
+summary(training[,21:30]) # seems like NonSilent_TO_Silent_Ratio has outlier: 3rd quartile is 3.93, yet max is 395.50
+# LOF_TO_Missense_Ratio max of 23.59 compared to 3rd quartile 0.12
+#some 3rd quartiles lower than mean value
+summary(training[,31:40]) #Gene_expression_Z_score also large max
+summary(training[,41:50]) 
+summary(training[,51:60])
+summary(training[,61:70])
+summary(training[,71:80])
+summary(training[,81:90])
+summary(training[,91:99]) 
+#overall problems found: large maxes in comparison to the 3rd quartile. Will need to work  with outliers
+```
+All the predictors seem to be numerical... some values are strictly integer? like Gene_age and FamilyMemberCount
+
+#Work with outliers?
+```{r}
+
+```
+
+
+
+## Now let's make lots of graphs!
+
+### First, let's make some histograms to understand the predictors  
+This checks the distribution of each predictor and looks for anything fishy. We should understand what a normal range should be for each predictor and see if their distributions accurately represent that.
+```{r}
+#for (var in names(training)[2:10]) { #so we don't make 100 graphs
+#  curr_plot = ggplot(training, aes_string(x=var)) + geom_histogram(bins = 20)
+#  print(curr_plot)
+#}
+
+```
+
+```{r understand_data}
+for (var in names(training)[2:12]) { #so we don't make 100 graphs
+  curr_plot = ggplot(training, aes_string(x=var))
+  if(is.factor(training[,var]))  {
+    curr_plot = curr_plot + geom_bar()
+    
+  } else  {
+    curr_plot = curr_plot + geom_histogram(bins=20)
+  }
+  print(curr_plot)
+}
+```
+Notes so far:  
+
+
+
+# Convert Features to Numeric
+
+```{r convert_to_numeric}
+#for each factor, convert it to numeric
+for (var in names(training))    #loop through each name of the variables with the alias "var"
+{
+  if(is.factor(training[,var]))
+  {
+    training[,var] = as.numeric(training[,var]) - 1 #TA likes to have 0 indexed, so values are 0 and 1
+  }
+}
+```
+
+### Let's also look at correlation  
+What is considered to have high multicollinearity?? abs(0.5)? or more?  
+
+This is solely the numeric values
+```{r}
+cor_mtx = round(cor(training[c(2:8,99)]), 2) #so we don't get a 100 by 100 table
+cor_mtx 
+
+cor_col = round(cor(training[c(2:99)]), 2)[98,] #this is to see all correlations with one variable
+cor_col
+```
+
+This is for a nicer visual
+```{r}
+#get the correlation matrix
+cor_mtx = round(cor(training[c(2:10,99)]), 2) #so we don't get a 100 by 100 table
+
+#reshape it
+melted_cor_mtx <- melt(cor_mtx)
+
+#draw the heatmap
+cor_heatmap = ggplot(data = melted_cor_mtx, aes(x=Var1, y=Var2, fill=value)) + geom_tile()
+cor_heatmap = cor_heatmap + 
+        scale_fill_gradient2(low = "blue", high = "red", mid = "white", midpoint = 0, limit = c(-1,1), space = "Lab", name="Pearson\nCorrelation") +
+        theme_minimal() +
+        theme(axis.text.x = element_text(angle = 45, vjust = 1, size = 12, hjust = 1))
+
+cor_heatmap
+```
+
+
+### Here's some scatterplots for each variable vs class
+```{r}
+for (feat in names(training)[11:20])
+#for (feat in vars_to_keep)
+{
+  if (feat != 'class')
+  {
+    p = ggplot(training, aes_string(feat, "class")) + geom_jitter(width=0.05, height=0.1, size=1)
+    print(p)
+  }
+}
+#if across class values there's not much difference in that particular x value, it reflects that predictor is not significant
+```
+A list of what does looks significant (each class distribution looks different for that particular predictor): 
+  N_Missense, 
+  N_LOF,
+  LOF_TO_Total_Ratio,
+  
+
+
+A list of what does looks slightly significant (maybe just a little bit. like more spread): 
+  LOF_KB_Ratio, 
+  Missense_Entropy,
+  LOF_TO_Silent_Ratio,
+  Missense_TO_Total_Ratio,
+  Polyphen2?
+  
+
+### Here's some scatterplots for each a variable vs another colored by class  
+This one might be more beneficial to just choose the two to compare, as it's hard to come up with every single combination with so many variables
+```{r}
+attach(training)
+# this doesn't include all pairwise though
+#trying to figure out how to make class discrete
+#training$classfactor <- factor(training$class)
+for (i in 2:6)
+#for (feat in vars_to_keep)
+{
+  var1 = names(training)[i]
+  var2 = names(training)[i+1]
+  var3 = names(training)[i+2]
+  
+  p1 = ggplot(data = training, aes_string(x = var1, y = var2)) + geom_jitter(aes(color = classfactor), width=0.05, height=0.1, size=1)
+  print(p1)
+  p2 = ggplot(data = training, aes_string(x = var1, y = var3)) + geom_jitter(aes(color = classfactor), width=0.05, height=0.1, size=1)
+  print(p2)
+  
+}
+#if across class values there's not much difference in that particular x value, it reflects that predictor is not significant
+```
+
+
+
+
+
+## Splitting data for cross validation (except i don't know how it works with 3 classes)
+```{r}
+set.seed(1234)
+#split the dataset into 80% training and 20% test 
+train_ind <- createDataPartition(training$classfactor, p = 0.8, list = FALSE)
+training_train = training[train_ind, ]
+training_test = training[-train_ind, ]
+#specifying the method type and K value (here I'm using 5)
+train_control <- trainControl(method="cv", number = 5, classProbs = TRUE, savePredictions = TRUE)
+```
+
+So I'm using this for now
+```{r}
+set.seed(1234)
+#split the dataset into 80% training and 20% test
+train_size = floor(0.8 * nrow(training))
+train_ind = sample(seq_len(nrow(training)), size = train_size)
+
+training_train = training[train_ind, ]
+training_test = training[-train_ind, ]
+```
+
+
+
+#Figure out the more important predictors
+## Logistic Regression  
+It shows statistical significance of the predictors, which is helpful...
+Except again, I'm not sure how it works with three class values
+```{r}
+#logistic regression
+glm.train <- multinom(class ~ N_Missense + N_LOF + N_Splice + LOF_KB_Ratio, data = training_train)
+summary(glm.train)
+glm.train
+
+#average training error rate
+glm.train.train <- predict(glm.train, training_train, type="class")
+trainError <- table(glm.train.train, training_train$class)
+trainError
+points <- trainError[1,1] + 20* (trainError[2,2] + trainError[3,3])
+totalPoints <- table(training_train$class)[[1]] + 20 * (table(training_train$class)[[2]] + table(training_train$class)[[3]])
+points/totalPoints
+
+
+#predict test with logistic regression
+glm.train.test = predict(glm.train, training_test, type="class")
+
+testError <- table(glm.train.test, training_test$class)
+testError
+
+#average test error rate
+sum(diag(testError)) / nrow(training_test)
+
+#counting points (20 points for correctly evaluating 1 and 2, 1 point for class 0)
+points <- testError[1,1] + 20* (testError[2,2] + testError[3,3])
+totalPoints <- table(training_test$class)[[1]] + 20 * (table(training_test$class)[[2]] + table(training_test$class)[[3]])
+points/totalPoints
+
+#actually predicting for the test set
+glm.test = predict(glm.train, test, type="class")
+predictions = cbind(test$id, glm.test) %>% as.data.frame()
+names(predictions) <- c("id", "class") #for some reason the values added by one
+predictions$class = predictions$class - 1
+
+#creating csv file to turn in
+write.csv(predictions, "predictions.csv", row.names = FALSE)
+```
+
+
+
+#Playing around with different subset of predictors
+```{r}
+
+```
+
+
+

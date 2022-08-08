@@ -1,0 +1,368 @@
+---
+title: "Stats 101C Kaggle Final"
+author: "Charles Liu (304804942)"
+date: "12/1/2020"
+output: pdf_document
+---
+
+$$ RMSE = \sqrt{\frac{1}{n} \sum{i=1}^{n} (gi - \hat{g}_i)^2} $$
+
+
+# Loading Necessary Packages
+```{r, warning=FALSE, message=FALSE}
+library(readr)
+library(dplyr)
+library(caret)
+library(randomForest)
+library(tidyverse)
+library(corrplot)
+library(gridExtra)
+library(rattle)
+```
+
+
+# Loading the Data (MUST LOAD INDIVIDUALLY!)
+*NOTE:* For my computer, this will cause my RStudio to crash. That is why i must load individually, but if you can load it all, then you can do it.
+
+```{r}
+setwd(getwd())
+train <- read.csv("training.csv")
+test <- read.csv("test.csv")
+```
+
+
+# Adjust Data
+```{r}
+train <- train %>% select(-PublishedDate,-id)
+ID <- test$id
+test <- test %>% select(-PublishedDate,-id)
+```
+
+
+# Training and test
+```{r}
+set.seed(1)
+training_rows <- sample(seq_len(nrow(train)), size = floor(0.70 * nrow(train)))
+train <- train[training_rows, ]
+valid <- train[-training_rows, ]
+```
+
+
+# get rid of near-zero variance predictors
+```{r}
+nzv <- nearZeroVar(train[,-ncol(train)])
+train_filt <- train[, -nzv]
+valid_filt <- valid[,-nzv]
+test_filt <- test[,-nzv]
+```
+
+# identify highly correlated predictors
+```{r}
+cors <- cor(train_filt[,-ncol(train_filt)])
+high_cor <- findCorrelation(cors, cutoff = .75)
+trainCor <- train_filt[,-high_cor]
+validCor <- valid_filt[,-high_cor]
+testCor <- test_filt[,-high_cor]
+```
+
+
+# Choose predictors (analyze importances)
+**IMPORTANT NOTE:** Run a simple randomForest() and then analyze from there.
+
+```{r}
+set.seed(1)
+rf_fit <- randomForest(growth_2_6 ~ .,
+                       data = trainCor, importance = TRUE)
+
+# Plot for Importance
+varImpPlot(rf_fit, sort=TRUE, n.var=min(30, nrow(rf_fit$importance)), type=NULL, class=NULL, scale=TRUE, main=deparse(substitute(rf_fit)))  
+
+
+
+# Check for important variables
+rf_fit$importance
+
+incr_MSE <- sort(rf_fit$importance[,1], decreasing = TRUE) # %IncMSE
+incr_node <- sort(rf_fit$importance[,2], decreasing = TRUE) # IncNodePurity
+incr_MSE_df <- data.frame(incr_MSE)
+incr_node_df <- data.frame(incr_node)
+
+incr_MSE_df
+incr_node_df
+```
+
+
+
+# Random Forest
+*NOTE:* Keep in my all the data I am using is purely from trainCor
+mtry = 24 -> RMSE = 0.6299537 -> full (all predictors)
+mtry = 48 -> RMSE = 0.6025543 -> full (all predictors)
+
+## use tuneRF to find best Mtry
+```{r}
+best_mtry <- tuneRF(trainCor, trainCor$growth_2_6, 
+                    improve = 1e-05, ntree = 500)
+# 96 or 145 -> trainCor
+```
+
+
+
+## Based on information from Increase Node Purity Dataframe
+```{r}
+set.seed(1)
+incr_node_df
+# based on incr_node -> cut-off is (value < 50), then remove those variables
+m <- (145 - 6 - 1)/3
+rf_fit <- randomForest(growth_2_6 ~ . 
+                       -punc_num_..15 
+                       -punc_num_.
+                       -punc_num_..13 
+                       -punc_num_..7 
+                       -punc_num_..6 
+                       -punc_num_..20, 
+                        data = trainCor, importance = TRUE, 
+                        mtry = m, ntree = 500)
+# RMSE = 0.6047131 -> model shown above
+```
+
+
+
+## Based on information from Increase MSE (percentage) Dataframe
+```{r}
+set.seed(1)
+incr_MSE_df
+# based on incr_MSE -> cut-off is (value < ...e-01), then remove those variables
+m <- (42 - 0)/3
+rf_fit <- randomForest(growth_2_6~
+                         Num_Views_Base_mid_high+cnn_25+views_2_hours+avg_growth_low+avg_growth_low_mid+cnn_10+Num_Subscribers_Base_low_mid+Num_Subscribers_Base_mid_high+Duration+cnn_86+punc_num_..28+avg_growth_mid_high+cnn_68+num_digit_chars+num_chars+count_vids_low_mid+count_vids_mid_high+Num_Views_Base_low+Num_Views_Base_low_mid+Num_Subscribers_Base_low+num_uppercase_chars+sd_red+sd_blue+punc_num_..12+hog_454+num_stopwords+punc_num_..1+doc2vec_10+num_uppercase_words+hog_678+pct_nonzero_pixels+hog_859+hog_673+edge_avg_value+doc2vec_18+hog_677+punc_num_..15+hog_1+hog_675, 
+                       data = trainCor, importance = TRUE, 
+                        mtry = m, ntree = 500)
+
+# rownames(incr_node_df)[1:46] -> finding the row names
+
+# RMSE = 0.7934337 -> model shown w/: +Num_Views_Base_mid_high+views_2_hours	+cnn_25+avg_growth_low+cnn_10+avg_growth_low_mid+Duration+cnn_86+punc_num_..28	+avg_growth_mid_high+cnn_68+num_digit_chars+num_chars
+## based on incr_MSE -> cut-off is (value < ...e-01), then remove those variables (13 variables total)
+
+# RMSE = 0.6008264 -> model shown w/: Num_Views_Base_mid_high+cnn_25+views_2_hours+avg_growth_low+avg_growth_low_mid+cnn_10+Num_Subscribers_Base_low_mid+Num_Subscribers_Base_mid_high+Duration+cnn_86+punc_num_..28+avg_growth_mid_high+cnn_68+num_digit_chars+num_chars+count_vids_low_mid+count_vids_mid_high+Num_Views_Base_low+Num_Views_Base_low_mid+Num_Subscribers_Base_low+num_uppercase_chars+sd_red+sd_blue+punc_num_..12+hog_454+num_stopwords+punc_num_..1+doc2vec_10+num_uppercase_words+hog_678+pct_nonzero_pixels+hog_859+hog_673+edge_avg_value+doc2vec_18+hog_677+punc_num_..15+hog_1+hog_675+hog_676+doc2vec_3+hog_342+hog_11+doc2vec_4+hog_651
+## based on incr_MSE -> cut-off is (value < ...e-02), then remove those variables (45 variables total)
+
+# RMSE = 0.6009457 -> model shown w/: ~ . -doc2vec_19-hog_152-doc2vec_16-punc_num_..20-hog_477-punc_num_..6-doc2vec_5-hog_495-punc_num_..7-hog_858-hog_810-hog_844-hog_852-hog_21-punc_num_..13-hog_402-hog_304 
+## based on incr_MSE -> cut-off is (value < ...e-03), then remove those variables (128 variables total) (most likely overfit)
+
+# RMSE = 0.6030564 -> model shown w/: Num_Views_Base_mid_high+views_2_hours+cnn_25+avg_growth_low+cnn_10+avg_growth_low_mid+Duration+Num_Subscribers_Base_mid_high+cnn_86+Num_Subscribers_Base_low_mid +punc_num_..28+num_chars+cnn_68+avg_growth_mid_high+num_digit_chars+count_vids_mid_high+sd_blue+sd_red+count_vids_low_mid+num_uppercase_chars+Num_Views_Base_low+Num_Subscribers_Base_low+doc2vec_10+hog_454+doc2vec_3+doc2vec_8+hog_342+hog_341+doc2vec_13+doc2vec_17+doc2vec_18+doc2vec_9+hog_678+hog_526+doc2vec_12+doc2vec_4+doc2vec_2+doc2vec_6+doc2vec_16+doc2vec_1+doc2vec_15+hog_13+punc_num_..12+hog_549+hog_673+hog_303+doc2vec_7+doc2vec_11+hog_350+hog_557+hog_669+edge_avg_value+hog_523+hog_641+hog_674+hog_242+hog_657+hog_651+doc2vec_19+hog_747+hog_676+doc2vec_0+hog_314+Num_Views_Base_low_mid+hog_668+hog_452+hog_492+ doc2vec_5+hog_686+ doc2vec_14+hog_666+hog_743+hog_711+hog_94+hog_859+hog_363+hog_815+hog_828+hog_316+hog_849+hog_698+hog_166+hog_655+pct_nonzero_pixels+hog_675+hog_677+hog_810+hog_665+hog_819+hog_304+hog_640+hog_818+hog_863+hog_476+hog_62+hog_643   
+##based on incr_MSE -> tuneRF() gave either 145 or 96 (96 variables total)
+
+# RMSE = 0.6036907 -> model shown w/: Num_Views_Base_mid_high+views_2_hours+cnn_25+avg_growth_low+cnn_10+avg_growth_low_mid+Duration+Num_Subscribers_Base_mid_high+cnn_86+Num_Subscribers_Base_low_mid +punc_num_..28+num_chars+cnn_68+avg_growth_mid_high+num_digit_chars+count_vids_mid_high+sd_blue+sd_red+count_vids_low_mid+num_uppercase_chars+Num_Views_Base_low+Num_Subscribers_Base_low+doc2vec_10+hog_454+doc2vec_3+doc2vec_8+hog_342+hog_341+doc2vec_13+doc2vec_17+doc2vec_18+doc2vec_9+hog_678+hog_526+doc2vec_12+doc2vec_4+doc2vec_2+doc2vec_6+doc2vec_16+doc2vec_1+doc2vec_15+hog_13+punc_num_..12+hog_549+hog_673+hog_303+doc2vec_7+doc2vec_11
+##based on incr_MSE -> tuneRF() gave either 145 or 96 (48 variables total)
+
+# RMSE = 0.6025543 -> model shown w/: ~ .
+##based on incr_MSE -> tuneRF() gave either 145 or 96 (145 variables total)
+
+
+# RMSE = 0.6022415 -> model shown w/: Num_Views_Base_mid_high+views_2_hours+cnn_25+avg_growth_low+cnn_10+avg_growth_low_mid+Duration+Num_Subscribers_Base_mid_high+cnn_86+Num_Subscribers_Base_low_mid +punc_num_..28+num_chars+cnn_68+avg_growth_mid_high+num_digit_chars+count_vids_mid_high+sd_blue+sd_red+count_vids_low_mid+num_uppercase_chars+Num_Views_Base_low+Num_Subscribers_Base_low+doc2vec_10+hog_454+doc2vec_3+doc2vec_8+hog_342+hog_341+doc2vec_13+doc2vec_17+doc2vec_18+doc2vec_9+hog_678+hog_526+doc2vec_12+doc2vec_4+doc2vec_2+doc2vec_6+doc2vec_16+doc2vec_1+doc2vec_15+hog_13+punc_num_..12+hog_549+hog_673+hog_303+doc2vec_7+doc2vec_11+hog_350+hog_557+hog_669+edge_avg_value+hog_523+hog_641+hog_674+hog_242+hog_657+hog_651+doc2vec_19+hog_747+hog_676+doc2vec_0+hog_314+Num_Views_Base_low_mid+hog_668+hog_452+hog_492+ doc2vec_5+hog_686+ doc2vec_14+hog_666+hog_743+hog_711+hog_94+hog_859+hog_363+hog_815+hog_828+hog_316+hog_849+hog_698+hog_166+hog_655+pct_nonzero_pixels+hog_675
+##based on incr_MSE -> tuneRF() gave either 145 or 96 (42 variables total)
+```
+
+
+
+# Check RMSE
+```{r}
+validations <- predict(rf_fit, validCor[,-ncol(validCor)])
+RMSE_check <- RMSE(validations, validCor$growth_2_6)
+RMSE_check
+```
+
+
+
+# Create our CSV file (attempts) (RF)
+```{r}
+predictions <- predict(rf_fit, testCor)
+final <- data.frame("id" = ID, "growth_2_6" = predictions)
+write.csv(final, "attempt.csv", row.names = FALSE)
+```
+
+
+
+
+# Generalized Boosted Method (regression)
+```{r}
+library(gbm)
+set.seed(1)
+gbm_fit_1000 <- gbm(growth_2_6 ~ ., data = trainCor, 
+                     distribution = "gaussian",
+                     n.trees = 1000)
+summary(gbm_fit_1000)
+
+
+gbm_fit_500 <- gbm(growth_2_6 ~ ., data = trainCor, 
+                     distribution = "gaussian",
+                     n.trees = 500)
+
+
+# 1000 -> Num_Views_Base_mid_high+cnn_25+avg_growth_low+views_2_hours+cnn_10+avg_growth_low_mid+Duration (top variables)
+
+# 500 -> Num_Views_Base_mid_high+cnn_25+avg_growth_low+views_2_hours+avg_growth_low_mid+cnn_10 (top variables)
+```
+
+**COMMENTS:**
+
+
+# Ridge Regression
+```{r}
+library(glmnet)
+set.seed(1)
+# which(colnames(train)=="growth_2_6" ) -> to find the growth_2_6 column
+
+x <- model.matrix(growth_2_6 ~., data = train)[,-258]
+y <- train$growth_2_6
+x_test <- model.matrix(growth_2_6 ~., data = valid)[,-258]
+y_test <- valid$growth_2_6
+grid <- 10^seq(10, -2, length = 100)
+
+ridge_model <- glmnet(x, y, family = "gaussian", 
+                      alpha = 0, lambda = grid, 
+                      standardize = TRUE)
+ridge_model$lambda # shows the lambda used
+
+# Shows the coefficients of a model for a specific value of lambda.
+ridge_coeff <- coef(ridge_model)
+dim(ridge_coeff)
+
+ridge_model$lambda[1] # Large lambda
+
+# Plot to check
+plot(ridge_model, xvar = "lambda", label = TRUE)
+
+
+ridge_cv <- cv.glmnet(x, y, family = "gaussian", 
+                      alpha = 0, lambda = grid, 
+                      standardize = TRUE, nfolds = 10)
+plot(ridge_cv)
+best_lambda_cv <- ridge_cv$lambda.min
+
+imp_predictors <- predict(ridge_model, s = best_lambda_cv, 
+                          type = "coefficients")
+
+imp_mx <- as.matrix(imp_predictors)
+imp_df <- as.data.frame(imp_mx)
+ordered_predictors <- imp_df[order(-imp_df[1]), , drop = FALSE]
+ordered_predictors
+
+
+# Give the test error
+pred_ridge <- predict(ridge_model, s=best_lambda_cv, newx=x_test)
+test_error_ridge <- mean((pred_ridge - y_test)^2)
+sqrt(test_error_ridge)
+```
+
+**COMMENTS:** Performed the worst out for its predictors as it takes a while to zero out the lambda. As for test error, this happened to outperform both Elastic-Net and LASSO. However, this does not outperform Random Forest. We can learn from this by using its cross-validation on what possible predictors to utilize. The top 3 potential predictors are hog_108, hog_117, and Num_Subscribers_Base_low_mid. 
+
+
+
+
+# LASSO
+```{r}
+library(glmnet)
+set.seed(1)
+# which(colnames(train)=="growth_2_6" ) -> to find the growth_2_6 column
+
+x <- model.matrix(growth_2_6 ~., data = train)[,-258]
+y <- train$growth_2_6
+x_test <- model.matrix(growth_2_6 ~., data = valid)[,-258]
+y_test <- valid$growth_2_6
+grid <- 10^seq(10, -2, length = 100)
+
+lasso_model <- glmnet(x, y, family = "gaussian", 
+                      alpha = 1, lambda = grid, 
+                      standardize = TRUE)
+lasso_model$lambda # shows the lambda used
+
+# Shows the coefficients of a model for a specific value of lambda.
+lasso_coeff <- coef(lasso_model)
+dim(lasso_coeff)
+
+lasso_model$lambda[1] # Large lambda
+
+# Plot to check
+plot(lasso_model, xvar = "lambda", label = TRUE)
+
+# alpha = 1
+lasso_cv <- cv.glmnet(x, y, family = "gaussian", 
+                      alpha = 1, lambda = grid, 
+                      standardize = TRUE, nfolds = 10)
+plot(lasso_cv)
+best_lambda_cv <- lasso_cv$lambda.min
+
+imp_predictors <- predict(lasso_model, s = best_lambda_cv, 
+                          type = "coefficients")
+
+imp_mx <- as.matrix(imp_predictors)
+imp_df <- as.data.frame(imp_mx)
+ordered_predictors <- imp_df[order(-imp_df[1]), , drop = FALSE]
+ordered_predictors
+
+
+# Give the test error
+pred_lasso <- predict(lasso_model, s=best_lambda_cv, newx=x_test)
+test_error_lasso <- mean((pred_lasso - y_test)^2)
+sqrt(test_error_lasso)
+```
+
+**COMMENTS:** Similar to Elastic-Net, as the plot shows how long it takes to zero out its predictors for lambda. The performance is rather okay compared to other methods, but it is better than Ridge Regression. This performs the second worst out of all the methods used due to its test error. However, this does not outperform Random Forest. We can learn from this by using its cross-validation on what possible predictors to utilize. The top 3 potential predictors are Num_Subscribers_Base_low_mid, hog_454, and count_vids_low_mid. 
+
+
+
+# Elastic-Net Logistic Regression
+```{r}
+library(glmnet)
+set.seed(1)
+# which(colnames(train)=="growth_2_6" ) -> to find the growth_2_6 column
+
+x <- model.matrix(growth_2_6 ~., data = train)[,-258]
+y <- train$growth_2_6
+x_test <- model.matrix(growth_2_6 ~., data = valid)[,-258]
+y_test <- valid$growth_2_6
+grid <- 10^seq(10, -2, length = 100)
+
+elastic_model <- glmnet(x, y, family = "gaussian", 
+                      alpha = 0.5, lambda = grid, 
+                      standardize = TRUE)
+elastic_model$lambda # shows the lambda used
+
+# Shows the coefficients of a model for a specific value of lambda.
+elastic_coeff <- coef(elastic_model)
+dim(elastic_coeff)
+
+elastic_model$lambda[1] # Large lambda
+
+# Plot to check
+plot(elastic_model, xvar = "lambda", label = TRUE)
+
+# alpha = 1
+elastic_cv <- cv.glmnet(x, y, family = "gaussian", 
+                      alpha = 0.5, lambda = grid, 
+                      standardize = TRUE, nfolds = 10)
+plot(elastic_cv)
+best_lambda_cv <- elastic_cv$lambda.min
+
+imp_predictors <- predict(elastic_model, s = best_lambda_cv, 
+                          type = "coefficients")
+
+imp_mx <- as.matrix(imp_predictors)
+imp_df <- as.data.frame(imp_mx)
+ordered_predictors <- imp_df[order(-imp_df[1]), , drop = FALSE]
+ordered_predictors
+
+
+# Give the test error
+pred_elastic <- predict(elastic_model, s=best_lambda_cv, newx=x_test)
+test_error_elastic <- mean((pred_elastic - y_test)^2)
+sqrt(test_error_elastic)
+```
+
+**COMMENTS:** Similar to LASSO, as the plot shows how long it takes to zero out its predictors for lambda. The performance is rather okay compared to other methods, but it is better than Ridge Regression. However, the test error does happen to perform the worst out of all the methods so far. However, this does not outperform Random Forest. We can learn from this by using its cross-validation on what possible predictors to utilize. The top 3 potential predictors are Num_Subscribers_Base_low_mid, hog_454, and count_vids_low_mid. This is interesting as it is practically the same as LASSO for its top 3 predictors.
+
+
+
+# REPORT
+My job in the group was to explore and do regressional analysis for the data, based on the methods of Ridge Regression, LASSO, and Elastic-Net. Following these methods, I would then try using Random Forest to try and get a better performance for the RMSE. I would also run Bagging method, but I decided to continue to analyze Random Forest method since it would further reduce variability. I started by regressing our response variable all the predictors for Ridge Regression, LASSO, and Elastic-Net methods. Afterwards, I would find the best lambda and apply it into the cross-validation of the methods. After ordering my results, I would see that Elastic-Net and LASSO happen to have the same top 3 predictors of "Num_Subscribers_Base_low_mid", "hog_454", and "count_vids_low_mid". This is a noticeable trend that I have applied to my future analysis of the predictors. However, when I calculate their test errors, it would result in a rather non-desirable number. I would then focus my attention on trying to use Bagging method, but I found Random Forest method to be more effective. This is true as Random Forest does a better job at reducing variability than standard Bagging. I would utilize Tyler's correlation plot to ensure my predictors are not too strongly correlated but also not weakly correlated. I have run various models for Random Forest with different combinations of predictors. I was able to also tune the tuning parameter into a desirable number. For my Random Forest models, I used Chelsea's near-zero variance function to maximize in reducing the variability of the data. 

@@ -1,0 +1,259 @@
+---
+title: "C_Predictions_Charles"
+author: "Charles Liu (304804942)"
+date: "11/8/2020"
+output: pdf_document
+---
+
+## Load necessary libraries
+```{r, warning = FALSE, message = FALSE}
+library(dplyr)
+library(boot)
+library(MASS) 
+library(nnet) 
+```
+
+##set working directory 
+```{r}
+setwd(getwd())
+```
+
+## Read in data
+```{r}
+data <- read.csv("training.csv", header = TRUE)
+test <- read.csv("test.csv", header = TRUE) 
+```
+
+# Check and edit data
+```{r, message=FALSE, warning=FALSE}
+attach(data)
+tags <- c("NG","OG","TsG")[as.integer(data$class) + 1]
+data$classfactor <- factor(tags, levels=c("NG","OG","TsG"))
+```
+
+## Getting rid of outliers
+```{r}
+predictors <- c("H3K79me2_height", "N_LOF", "VEST_score","BioGRID_log_degree", "H3Kme2_height", "One_Minus_S50_score_replication_timing","ncGERP","Frameshift_indel_fraction")
+NG <- data[which(data$class == 0),]
+OG <- data[which(data$class == 1),]
+TSG <- data[which(data$class == 2),]
+##For NG
+above <- which(NG$H3K79me2_height > quantile(NG$H3K79me2_height,.75)[[1]] + 1.5*IQR(NG$H3K79me2_height))
+#below <- which(NG$H3K79me2_height < quantile(NG$H3K79me2_height,.25)[[1]] - 1.5*IQR(NG$H3K79me2_height))
+NG <- NG[-c(above),]
+below <- which(NG$H3K4me2_width > quantile(NG$H3K4me2_width,.75)[[1]] + 2*IQR(NG$H3K4me2_width))
+#below <- which(TSG$H3Kme2_height < quantile(TSG$H3Kme2_height,.25)[[1]] - 1.5*IQR(TSG$H3Kme2_height))
+above <- which(NG$N_LOF > quantile(NG$N_LOF,.75)[[1]] + 1.5*IQR(NG$N_LOF))
+NG <- NG[-c(above,below),]
+
+#above <- which(NG$N_LOF > quantile(NG$N_LOF,.75)[[1]] + 1.5*IQR(NG$N_LOF))
+#below <- which(NG$N_LOF < quantile(NG$N_LOF,.25)[[1]] - 1.5*IQR(NG$N_LOF))
+
+#NG <- NG[-c(above),]
+
+above <- which(NG$VEST_score > quantile(NG$VEST_score,.75)[[1]] + 2*IQR(NG$VEST_score))
+#below <- which(NG$VEST_score < quantile(NG$VEST_score,.25)[[1]] - 1.5*IQR(NG$VEST_score))
+
+NG <- NG[-c(above),]
+
+#above <- which(NG$Inactivating_mutations_fraction > quantile(NG$Inactivating_mutations_fraction,.75)[[1]] + 2*IQR(NG$Inactivating_mutations_fraction))
+#below <- which(NG$Inactivating_mutations_fraction < quantile(NG$Inactivating_mutations_fraction,.25)[[1]] - 1.5*IQR(NG$Inactivating_mutations_fraction))
+#above <- which(NG$ncGERP > quantile(NG$ncGERP,.75)[[1]] + 2*IQR(NG$ncGERP))
+#NG <- NG[-c(above),]
+
+#above <- which(NG$Frameshift_indel_fraction > quantile(NG$Frameshift_indel_fraction,.75)[[1]] + 2.5*IQR(NG$Frameshift_indel_fraction))
+#below <- which(NG$Frameshift_indel_fraction < quantile(NG$Frameshift_indel_fraction,.25)[[1]] - 2.5*IQR(NG$Frameshift_indel_fraction))
+
+#NG <- NG[-c(above,below),]
+
+#For OG
+above <- which(OG$H3K79me2_height > quantile(OG$H3K79me2_height,.75)[[1]] + 1.5*IQR(OG$H3K79me2_height))
+below <- which(OG$H3K79me2_height < quantile(OG$H3K79me2_height,.25)[[1]] - 1.5*IQR(OG$H3K79me2_height))
+
+OG <- OG[-c(above,below),]
+
+#above <- which(OG$N_LOF > quantile(OG$N_LOF,.75)[[1]] + 1.5*IQR(OG$N_LOF))
+#below <- which(OG$N_LOF < quantile(OG$N_LOF,.25)[[1]] - 1.5*IQR(OG$N_LOF))
+
+#OG <- OG[-c(above,below),]
+
+#above <- which(OG$VEST_score > quantile(OG$VEST_score,.75)[[1]] + 1.5*IQR(OG$VEST_score))
+#below <- which(OG$VEST_score < quantile(OG$VEST_score,.25)[[1]] - 1.5*IQR(OG$VEST_score))
+
+#OG <- OG[-c(above,below),]
+
+#above <- which(OG$Inactivating_mutations_fraction > quantile(OG$Inactivating_mutations_fraction,.75)[[1]] + 1.5*IQR(OG$Inactivating_mutations_fraction))
+#below <- which(OG$Inactivating_mutations_fraction < quantile(OG$Inactivating_mutations_fraction,.25)[[1]] - 1.5*IQR(OG$Inactivating_mutations_fraction))
+
+#OG <- OG[-c(above,below),]
+
+#above <- which(OG$Frameshift_indel_fraction> quantile(OG$Frameshift_indel_fraction,.75)[[1]] + 1.5*IQR(OG$One_Minus_S50_score_replication_timiOG))
+#below <- which(OG$Frameshift_indel_fraction < quantile(OG$Frameshift_indel_fraction,.25)[[1]] - 1.5*IQR(OG$One_Minus_S50_score_replication_timiOG))
+
+#OG <- OG[-c(above,below),]
+
+
+#For TSG
+#above <- which(TSG$H3K79me2_height > quantile(TSG$H3K79me2_height,.75)[[1]] + 1.5*IQR(TSG$H3K79me2_height))
+#below <- which(TSG$H3K79me2_height < quantile(TSG$H3K79me2_height,.25)[[1]] - 1.5*IQR(TSG$H3K79me2_height))
+#below <- which(TSG$H3Kme2_height < quantile(TSG$H3Kme2_height,.25)[[1]] - 1.5*IQR(TSG$H3Kme2_height))
+#TSG <- TSG[-c(below),]
+
+#above <- which(TSG$N_LOF > quantile(TSG$N_LOF,.75)[[1]] + 1.5*IQR(TSG$N_LOF))
+#below <- which(TSG$N_LOF < quantile(TSG$N_LOF,.25)[[1]] - 1.5*IQR(TSG$N_LOF))
+
+#TSG <- TSG[-c(above,below),]
+
+#above <- which(TSG$VEST_score > quantile(TSG$VEST_score,.75)[[1]] + 1.5*IQR(TSG$VEST_score))
+#below <- which(TSG$VEST_score < quantile(TSG$VEST_score,.25)[[1]] - 1.5*IQR(TSG$VEST_score))
+
+#TSG <- TSG[-c(above,below),]
+
+#above <- which(TSG$Inactivating_mutations_fraction > quantile(TSG$Inactivating_mutations_fraction,.75)[[1]] + 1.5*IQR(TSG$Inactivating_mutations_fraction))
+#below <- which(TSG$Inactivating_mutations_fraction < quantile(TSG$Inactivating_mutations_fraction,.25)[[1]] - 1.5*IQR(TSG$Inactivating_mutations_fraction))
+
+#TSG <- TSG[-c(above,below),]
+
+#above <- which(TSG$Frameshift_indel_fraction > quantile(TSG$Frameshift_indel_fraction,.75)[[1]] + 1.5*IQR(TSG$One_Minus_S50_score_replication_timiTSG))
+#below <- which(TSG$Frameshift_indel_fraction < quantile(TSG$Frameshift_indel_fraction,.25)[[1]] - 1.5*IQR(TSG$One_Minus_S50_score_replication_timiTSG))
+
+#TSG <- TSG[-c(above,below),]
+
+
+new_data <- rbind(NG,TSG,OG)
+```
+
+# Function for WCA
+```{r}
+get_wca <- function(pred, true)
+{
+  max_score = sum(true == 0)*1 + sum(true == 1)*20 + sum(true==2)*20
+  
+  score = sum((true == 0)&(pred == 0))*1 + sum((true == 1)&(pred == 1))*20+ sum((true == 2)&(pred == 2))*20
+  
+  return (score/max_score)
+}
+```
+
+##LDA model
+```{r}
+#lda model
+cv.fun <- function(this.fold, data){
+  train <- filter(data, my.folds != this.fold)
+  validate <- filter(data, my.folds == this.fold)
+  total_train_points = table(train$class)[1] + 20*sum(table(train$class)[2:3]) %>%as.integer()
+  model_weights<- c(ifelse(train$class == 0,1/total_train_points,20/total_train_points))
+  
+  lda.model = lda(class ~ 
+                  H3K79me2_height
+                + N_LOF 
+                + BioGRID_log_degree
+                + VEST_score
+                + RVIS_percentile
+                , data = train)
+
+  
+  predictions = predict(lda.model, validate)
+  preds = as.integer(predictions$class)
+  preds = preds-1
+  #testError <- table(preds, validate$class)
+  #testError
+
+  wca = get_wca(preds, validate$class)
+  return(wca)
+
+}
+```
+
+# Create test set (Cassandra used this)
+```{r}
+train = new_data
+total_train_points = table(train$class)[1] + 20*sum(table(train$class)[2:3]) %>%as.integer()
+model_weights<- c(ifelse(train$class == 0,1/total_train_points,20/total_train_points))
+  
+  model = multinom(class ~ 
+                  H3K79me2_height
+                + N_LOF 
+                + BioGRID_log_degree
+                + VEST_score
+                + ncGERP
+                + One_Minus_S50_score_replication_timing
+                , data = train,
+                weights = model_weights)
+
+  training <- predict(model,data)
+  probs <- predict(model,train,"probs")
+table(training,data$class)
+get_wca(training,data$class)
+#probs <- training$posterior
+
+  
+#actually predicting for the test set
+testing = predict(model, test)
+predictions = cbind(test$id, testing) %>% as.data.frame()
+names(predictions) <- c("id", "class") #for some reason the values added by one
+predictions$class = predictions$class - 1
+
+#creating csv file to turn in
+#write.csv(predictions, "predictions.csv", row.names = FALSE)
+```
+
+
+
+
+
+
+
+
+
+
+
+# Create test set (Testing)
+```{r}
+train = new_data
+total_train_points = table(train$class)[1] + 20*sum(table(train$class)[2:3]) %>%as.integer()
+model_weights<- c(ifelse(train$class == 0,1/total_train_points,20/total_train_points))
+  
+  model = multinom(class ~ 
+                  # Richard's Choices
+                  CDS_length+ # valuable
+                  S50_score_replication_timing+ # removable
+                  Super_Enhancer_percentage+ 
+                  BioGRID_clossness+
+                  N_Missense+ # super valuable
+                  LOF_TO_Total_Ratio+
+                  VEST_score+ # super valuable
+
+                  # Charles' Choices (Yes)
+                  Missense_Zscore+ # valauble
+                  Broad_H3K4me3_percentage+ # removable?
+                  H3K36me3_width+ # super valuable
+                  Broad_H3K27ac_percentage+ # valuable
+                  Broad_H3K9ac_percentage+
+                  Broad_H3K79me2_percentage+
+                  
+                  H4K20me1_width+ # valuable
+                  
+                  Broad_H4K20me1_percentage+ # valuable
+
+                  # Charles' Choices (Maybe)
+                  Gene_body_hypomethylation_in_cancer # super valuable
+                , data = train,
+                weights = model_weights)
+
+  training <- predict(model,data)
+  probs <- predict(model,train,"probs")
+table(training,data$class)
+get_wca(training,data$class)
+#probs <- training$posterior
+
+  
+#actually predicting for the test set
+testing = predict(model, test)
+predictions = cbind(test$id, testing) %>% as.data.frame()
+names(predictions) <- c("id", "class") #for some reason the values added by one
+predictions$class = predictions$class - 1
+
+#creating csv file to turn in
+write.csv(predictions, "predictions.csv", row.names = FALSE)
+```

@@ -1,0 +1,177 @@
+---
+title: "kaggle funcs"
+author: "Cassandra Tai"
+date: "11/5/2020"
+output: pdf_document
+---
+
+## Load necessary libraries
+```{r, warning = FALSE, message = FALSE}
+#library(ggplot2)
+library(dplyr)
+#library(reshape2)
+#library(caret)
+library(boot)
+#library(readxl)
+library(MASS) # for LDA and QDA
+library(nnet) #for more than 2 response values logistic
+```
+
+##set working directory 
+```{r}
+setwd("C:\\Users\\cassa\\Documents\\UCLA\\Fourth Year\\Stats 101C\\Midterm Project") #change it to your own!
+```
+
+## Read in data
+```{r}
+data <- read.csv("training.csv", header = TRUE)
+test <- read.csv("test.csv", header = TRUE) 
+
+dim(data)
+
+#attach(data)
+#convertclass to factor
+#tags <- c("NG","OG","TsG")[as.integer(data$class) + 1]
+#data$classfactor <- factor(tags, levels=c("NG","OG","TsG"))
+```
+
+## make equal partitions
+```{r}
+#limit <- 100
+#indexNG <- sample(which(class==0))[1:limit]
+#indexOG <- sample(which(class==1))[1:limit]
+#indexTSG <- sample(which(class==2))[1:limit]
+#train_ind <- c(indexNG,indexOG, indexTSG)
+#training_train = training[train_ind, ]
+#weights.train =weights[train_ind]
+#training_test = training[-train_ind, ]
+#weights.test =weights[-train_ind]
+
+#data_train = data[train_ind, ]
+#data_test = data[-train_ind,]
+```
+
+
+# Function for WCA
+```{r}
+get_wca <- function(pred, true)
+{
+  #get max score
+  max_score = sum(true == 0)*1 + sum(true == 1)*20 + sum(true==2)*20
+  
+  #get achieved score
+  score = sum((true == 0)&(pred == 0))*1 + sum((true == 1)&(pred == 1))*20+ sum((true == 2)&(pred == 2))*20
+  
+  #get wca
+  return (score/max_score)
+}
+```
+
+#Training and validating the model (Pick one of these to run, b/c I called them all the same name )
+```{r}
+#logistic model
+cv.fun <- function(this.fold, data){
+  train <- filter(data, my.folds != this.fold)
+  validate <- filter(data, my.folds == this.fold)
+  total_train_points = table(train$class)[1] + 20*sum(table(train$class)[2:3]) %>%as.integer()
+  model_weights<- c(ifelse(train$class == 0,1/total_train_points,20/total_train_points))
+  
+  lr_model = multinom(class ~ 
+                  H3K79me2_height
+                + N_LOF 
+                + BioGRID_log_degree
+                + VEST_score
+                + RVIS_percentile
+                , data = train,
+                weights = model_weights)
+
+  
+  preds = predict(lr_model, validate)
+  preds = as.integer(preds)
+  preds = preds-1
+  #testError <- table(preds, validate$class)
+
+  wca = get_wca(preds, validate$class)
+  return(wca)
+
+}
+```
+
+##LDA model
+```{r}
+#lda model
+cv.fun <- function(this.fold, data){
+  train <- filter(data, my.folds != this.fold)
+  validate <- filter(data, my.folds == this.fold)
+  #total_train_points = table(train$class)[1] + 20*sum(table(train$class)[2:3]) %>%as.integer()
+  #model_weights<- c(ifelse(train$class == 0,1/total_train_points,20/total_train_points))
+  
+  lda.model = lda(class ~ 
+                  H3K79me2_height
+                + N_LOF 
+                + BioGRID_log_degree
+                + VEST_score
+                + RVIS_percentile
+                , data = train)
+
+  
+  predictions = predict(lda.model, validate)
+  preds = as.integer(predictions$class)
+  preds = preds-1
+  #testError <- table(preds, validate$class)
+  #testError
+
+  wca = get_wca(preds, validate$class)
+  return(wca)
+
+}
+```
+
+##QDA Model
+```{r}
+#qda model
+cv.fun <- function(this.fold, data){
+  train <- filter(data, my.folds != this.fold)
+  validate <- filter(data, my.folds == this.fold)
+  #total_train_points = table(train$class)[1] + 20*sum(table(train$class)[2:3]) %>%as.integer()
+  #model_weights<- c(ifelse(train$class == 0,1/total_train_points,20/total_train_points))
+  
+  lda.model = qda(class ~ 
+                  H3K79me2_height
+                + N_LOF 
+                + BioGRID_log_degree
+                + VEST_score
+                + RVIS_percentile
+                , data = train)
+
+  
+  predictions = predict(lda.model, validate)
+  preds = as.integer(predictions$class)
+  preds = preds-1
+  #testError <- table(preds, validate$class)
+  #testError
+
+  wca = get_wca(preds, validate$class)
+  return(wca)
+
+}
+```
+
+
+##Iterate through n iterations of k fold cv
+```{r}
+n = 1 #n iterations of k fold cv
+for(i in 1:n) {
+  #partition the data
+  k = 5 #how many folds we want
+  data <- mutate(data,
+                   my.folds = sample(1:k,
+                                     size = nrow(data),
+                                     replace = TRUE))
+  wca.values <- sapply(seq_len(k),
+                     FUN = cv.fun,
+                     data = data) #%>% mean()
+  #print(wca.values)
+  print(mean(wca.values))
+}
+```
