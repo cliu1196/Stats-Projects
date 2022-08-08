@@ -1,0 +1,1002 @@
+---
+title: "Stats141XP - Final Project (Annotated)"
+author: 'Team Members: Amanda Xu, Gloria Won, Jacob Samuels, Jordan Tallman, Priya Jain, Charles Liu'
+date: "4/30/2021"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+
+# Loading Necessary Packages
+```{r, warning=FALSE, message=FALSE}
+library(readr)
+library(ggplot2)
+library(tidyverse)
+library(corrplot)
+library(gplots)
+library(ggpubr)
+library(car)
+library(psych)
+```
+
+# Loading Necessary Data
+```{r, warning=FALSE, message=FALSE}
+setwd(getwd())
+d <- read_csv("Code_Sheet_Age_Project_Apr_26.csv")
+```
+
+# Preliminary Analysis
+```{r, warning=FALSE, message=FALSE}
+# Check for any NA's
+anyNA(d) # No NA's
+
+# Find which columns have NA's
+colnames(d)[colSums(is.na(d)) > 0] # No NA's
+summary(d)
+glimpse(d)
+
+# Edit `Upper bleph (0 = null, 1 = right, 2 = left, 3 = bilateral)` into character column
+d$`Upper bleph (0 = null, 1 = right, 2 = left, 3 = bilateral)` <- as.character(d$`Upper bleph (0 = null, 1 = right, 2 = left, 3 = bilateral)`)
+
+# Names of Numeric columns
+d_num <- d %>% 
+  select_if(is.numeric)
+colnames(d_num)
+d_num
+
+# Names of Character columns
+d_char <- d %>% 
+  select_if(is.character)
+colnames(d_char)
+d_char
+
+# Start Analyzing the Data (Numeric Columns)
+## Analyzing the Numeric columns
+corr_d.1 <- cor(d_num[,1:5])
+corrplot(corr_d.1, method = "circle") # smaller parts
+
+corr_d.2 <- cor(d_num[,7:10])
+corrplot(corr_d.2, method = "circle") # smaller parts
+
+corr_d.3 <- cor(d_num[,11:14])
+corrplot(corr_d.3, method = "circle") # smaller parts
+
+corr_d.4 <- cor(d_num)
+corrplot(corr_d.4, method = "circle") # combined
+
+# Setting up differences for the data for the 3 AI Models (Actual vs. AI)
+diff_m1 <- d$age_actual - d$ai_model_1
+diff_m2 <- d$age_actual - d$ai_model_2
+diff_m3 <- d$age_actual - d$ai_model_3
+
+# Histogram & Boxplots
+par(mfrow=c(2,2))
+hist(diff_m1,breaks = 30, main="Model 1 Differences", 
+     xlab="Difference b/w Actual & AI Model 1 Age")
+hist(diff_m2,breaks = 30, main="Model 2 Differences", 
+     xlab="Difference b/w Actual & AI Model 2 Age")
+hist(diff_m3,breaks = 30, main="Model 3 Differences",
+     xlab="Difference b/w Actual & AI Model 3 Age")
+
+par(mfrow=c(1,1))
+boxplot(diff_m1, diff_m2, diff_m3,
+        main="Boxplot for All AI Model Differences", xlab="Model Types", 
+        names=c("Model 1", "Model 2", "Model 3"))
+### Graphically, it looks like Model 2 performs better than Model 3 in terms of *Accuracy*. Numerically, Model 3 performs better than Model 2. Further analysis is needed for the AI Models.
+
+### performs best -> Model 2 -> has some Outliers to consider and probably remove
+### performs worst -> Model 1
+### performs middle -> Model 3 -> has not Outliers, so might be better than M2
+
+### We ignored Model 1 since it clearly performs the worst. Further analysis is unnecessary. M3 has both smaller Mean and Median than M2. We shall further determine which of the two models perform the best in terms of accuracy and reliability. (Should look at MSE to tell for accuracy)
+summary(diff_m2)
+summary(diff_m3)
+
+# Plot Means for Categorical Variables [Model 2]
+### When it comes to the Categorical variables for "f-number" all the way till "dimensions" (along with "Upper Bleph"), they are all "Null", but the rest of the information might be useful. (columns 11,21-27) (observations 82 & 113 are all Null for these columns)
+par(mfrow=c(2,2))
+plotmeans(diff_m2[-c(53,82,113)] ~ d$model[-c(53,82,113)], 
+          data = d, xlab="Camera Model", 
+          ylab="Age Difference (M2)", main="Mean Significance for Camera Model") ### need to remove iPhone 6 and Null -> I removed iPhone 6 (since it was n=1 and it is observation 53) but might be important -> further analysis needed
+
+plotmeans(diff_m2[-c(82,113)] ~ d$make[-c(82,113)], 
+          data = d, xlab="Camera Type", 
+          ylab="Age Difference (M2)", main="Mean Significance for Camera Type") ### not as relevant since mostly Canon anyways but might be interested in
+
+plotmeans(diff_m2[-c(82,113)] ~ d$sensitivity[-c(82,113)], 
+          data = d, xlab="Sensitivity Rating", 
+          ylab="Age Difference (M2)", main="Mean Significance for Sensitivity Rating")
+
+plotmeans(diff_m2[-c(82,113)] ~ d$`exposure time`[-c(82,113)], 
+          data = d, xlab="Exposure Time", 
+          ylab="Age Difference (M2)", main="Mean Significance for Exposure Time") 
+### need to edit to either remove the n = 1 observations or keep them -> further analysis is needed
+
+par(mfrow=c(2,2))
+plotmeans(diff_m2[-c(82,113)] ~ d$`focal length`[-c(82,113)], 
+          data = d, xlab="Focal Length", 
+          ylab="Age Difference (M2)", main="Mean Significance for Focal Length") ### need to edit to either remove the n = 1 observations or keep them -> further analysis is needed
+
+plotmeans(diff_m2[-c(82,113)] ~ d$`f-number`[-c(82,113)], 
+          data = d, xlab="F-Number", 
+          ylab="Age Difference (M2)", main="Mean Significance for F-Number") 
+### n = 1 is really dragging down the Plot Means -> further analysis is needed
+
+plotmeans(diff_m2[-c(82,113)] ~ d$dimensions[-c(82,113)], 
+          data = d, xlab="Dimensions of Photo", main="Mean Significance for Dimensions") 
+### need to edit to either remove the n = 1 observations or keep them -> further analysis is needed
+
+plotmeans(diff_m2[-c(82,113)] ~ d$`Upper bleph (0 = null, 1 = right, 2 = left, 3 = bilateral)`[-c(82,113)], 
+          data = d, xlab="Upper Bleph Treatment", 
+          ylab="Age Difference (M2)", main="Mean Significance for Upper Bleph")
+
+# Plot Means for Categorical Variables [Model 3]
+### When it comes to the Categorical variables for "f-number" all the way till "dimensions" (along with "Upper Bleph"), they are all "Null", but the rest of the information might be useful. (columns 11,21-27) (observations 82 & 113 are all Null for these columns)
+par(mfrow=c(2,2))
+plotmeans(diff_m3[-c(53,82,113)] ~ d$model[-c(53,82,113)], 
+          data = d, xlab="Camera Model", 
+          ylab="Age Difference (M3)", main="Mean Significance for Camera Model") ### need to remove iPhone 6 and Null -> I removed iPhone 6 (since it was n=1 and it is observation 53) but might be important -> further analysis needed
+
+plotmeans(diff_m3[-c(82,113)] ~ d$make[-c(82,113)], 
+          data = d, xlab="Camera Type", 
+          ylab="Age Difference (M3)", main="Mean Significance for Camera Type") ### not as relevant since mostly Canon anyways but might be interested in
+
+plotmeans(diff_m3[-c(82,113)] ~ d$sensitivity[-c(82,113)], 
+          data = d, xlab="Sensitivity Rating", 
+          ylab="Age Difference (M3)", main="Mean Significance for Sensitivity Rating")
+
+plotmeans(diff_m3[-c(82,113)] ~ d$`exposure time`[-c(82,113)], 
+          data = d, xlab="Exposure Time", 
+          ylab="Age Difference (M3)", main="Mean Significance for Exposure Time") 
+### need to edit to either remove the n = 1 observations or keep them -> further analysis is needed
+
+par(mfrow=c(2,2))
+plotmeans(diff_m3[-c(82,113)] ~ d$`focal length`[-c(82,113)], 
+          data = d, xlab="Focal Length", 
+          ylab="Age Difference (M3)", main="Mean Significance for Focal Length") ### need to edit to either remove the n = 1 observations or keep them -> further analysis is needed
+
+plotmeans(diff_m3[-c(82,113)] ~ d$`f-number`[-c(82,113)], 
+          data = d, xlab="F-Number", 
+          ylab="Age Difference (M3)", main="Mean Significance for F-Number") 
+### n = 1 is really dragging down the Plot Means -> further analysis is needed
+
+plotmeans(diff_m3[-c(82,113)] ~ d$dimensions[-c(82,113)], 
+          data = d, xlab="Dimensions of Photo", 
+          ylab="Age Difference (M3)", main="Mean Significance for Dimensions") 
+### need to edit to either remove the n = 1 observations or keep them -> further analysis is needed
+
+plotmeans(diff_m3[-c(82,113)] ~ d$`Upper bleph (0 = null, 1 = right, 2 = left, 3 = bilateral)`[-c(82,113)], 
+          data = d, xlab="Upper Bleph Treatment", 
+          ylab="Age Difference (M3)", main="Mean Significance for Upper Bleph")
+```
+
+# Table of Sample Sizes for Hard to See Plotmeans(...)
+*Note:* We were not able to rotate the sample sizes (n), so we created a table for you to see the sample sizes.
+```{r, warning=FALSE, message=FALSE}
+# Create Dataframes for Sample Sizes
+t1 <- data.frame(Exposure_Time=d$`exposure time`[-c(82,113)],
+                 Focal_Length=d$`focal length`[-c(82,113)],
+                 F_Number=d$`f-number`[-c(82,113)],
+                 Dimensions=d$dimensions[-c(82,113)])
+size_exp_time <- t1 %>% 
+  group_by(Exposure_Time) %>% 
+  summarise(Sample_Sizes=n())
+size_focal <- t1 %>% 
+  group_by(Focal_Length) %>% 
+  summarise(Sample_Sizes=n())
+size_f_num <- t1 %>% 
+  group_by(F_Number) %>% 
+  summarise(Sample_Sizes=n())
+size_dim <- t1 %>% 
+  group_by(Dimensions) %>% 
+  summarise(Sample_Sizes=n())
+
+# View Dataframes
+size_exp_time
+size_focal
+size_f_num
+size_dim
+```
+
+# Testing for ALL "pre-measurements"
+```{r, warning=FALSE, message=FALSE}
+# Part 1.1
+all_pre_m1 <- sort(which(d$pre_or_post_operation %in% c("pre", "pre_2",
+                                                        "pre_3")))
+all_pre_m2 <- sort(which(d$pre_or_post_operation %in% c("pre", "pre_2",
+                                                        "pre_3")))
+all_pre_m3 <- sort(which(d$pre_or_post_operation %in% c("pre", "pre_2",
+                                                        "pre_3")))
+
+# Part 2.1
+all_pre_actual_m1 <- d$age_actual[all_pre_m1]
+all_pre_AIage_m1 <- d$ai_model_1[all_pre_m1]
+all_pre_actual_m2 <- d$age_actual[all_pre_m2]
+all_pre_AIage_m2 <- d$ai_model_2[all_pre_m2]
+all_pre_actual_m3 <- d$age_actual[all_pre_m3]
+all_pre_AIage_m3 <- d$ai_model_3[all_pre_m3]
+
+# Part 3.1
+## Correlation (Accuracy)
+all_pre_cor_m1 <- cor(all_pre_AIage_m1, all_pre_actual_m1)
+all_pre_cor_m2 <- cor(all_pre_AIage_m2, all_pre_actual_m2)
+all_pre_cor_m3 <- cor(all_pre_AIage_m3, all_pre_actual_m3)
+
+# Part 4.1
+## Influence Plot (Leverages & Outliers)
+all_pre_test_lm_m1 <- lm(all_pre_AIage_m1 ~ all_pre_actual_m1)
+all_pre_ip_m1 <- influencePlot(all_pre_test_lm_m1, 
+                               main="All Pre-Measurements AI Model 1")
+all_pre_ip_m1
+4/length(all_pre_actual_m1) ## Hat-values limit for Influcence Plot
+## High Leverage Points: 35, 165 (? > 4/n for Hat-values)
+## Outlier Points: 100, 166 (StudRes is either [-2 > ? > +2])
+## Good Leverage Points: 35, 165 (? > 4/n for Hat values & within [-2 > ? > +2])
+## Bad Leverage Points: N/A (? > 4/n for Hat values & outside [-2 > ? > +2]
+
+all_pre_test_lm_m2 <- lm(all_pre_AIage_m2 ~ all_pre_actual_m2)
+all_pre_ip_m2 <- influencePlot(all_pre_test_lm_m2, 
+                               main="All Pre-Measurements AI Model 2")
+all_pre_ip_m2
+4/length(all_pre_actual_m2) ## Hat-values limit for Influcence Plot
+## High Leverage Points: 35, 137, 165 (? > 4/n for Hat-values)
+## Outlier Points: 59, 123, 137 (StudRes is either [-2 > ? > +2])
+## Good Leverage Points: 35, 165 (? > 4/n for Hat values & within [-2 > ? > +2])
+## Bad Leverage Points: 137 (? > 4/n for Hat values & outside [-2 > ? > +2]
+
+all_pre_test_lm_m3 <- lm(all_pre_AIage_m3 ~ all_pre_actual_m3)
+all_pre_ip_m3 <- influencePlot(all_pre_test_lm_m3, 
+                               main="All Pre-Measurements AI Model 3")
+all_pre_ip_m3
+4/length(all_pre_actual_m3) ## Hat-values limit for Influcence Plot
+## High Leverage Points: 35, 165 (? > 4/n for Hat-values)
+## Outlier Points: 31, 166 (StudRes is either [-2 > ? > +2])
+## Good Leverage Points: 35, 165 (? > 4/n for Hat values & within [-2 > ? > +2])
+## Bad Leverage Points: N/A (? > 4/n for Hat values & outside [-2 > ? > +2]
+
+# Part 5.1
+## Run the Linear Regression, MSE (Accuracy), and R-Squared (Explanation of Varaibility)
+all_pre_lm_m1 <- lm(all_pre_AIage_m1 ~ all_pre_actual_m1)
+all_pre_MSE_m1 <- mean((all_pre_lm_m1$residuals)^2)
+all_pre_r_m1 <- summary(all_pre_lm_m1)$r.squared
+
+all_pre_lm_m2 <- lm(all_pre_AIage_m2 ~ all_pre_actual_m2)
+all_pre_MSE_m2 <- mean((all_pre_lm_m2$residuals)^2)
+all_pre_r_m2 <- summary(all_pre_lm_m2)$r.squared
+
+all_pre_lm_m3 <- lm(all_pre_AIage_m3 ~ all_pre_actual_m3)
+all_pre_MSE_m3 <- mean((all_pre_lm_m3$residuals)^2)
+all_pre_r_m3 <- summary(all_pre_lm_m3)$r.squared
+
+# Part 6.1 (Reliability)
+## Correlation b/w Each Models
+all_pre_reli_m1.2 <- cor(all_pre_AIage_m1, all_pre_AIage_m2)
+all_pre_reli_m1.3 <- cor(all_pre_AIage_m1, all_pre_AIage_m3)
+all_pre_reli_m2.3 <- cor(all_pre_AIage_m2, all_pre_AIage_m3)
+```
+
+# Testing for ALL "post-measurements"
+```{r, warning=FALSE, message=FALSE}
+# Part 1.1
+all_post_m1 <- sort(which(d$pre_or_post_operation %in% c("post", "post_2",
+                                                        "post_3")))
+all_post_m2 <- sort(which(d$pre_or_post_operation %in% c("post", "post_2",
+                                                        "post_3")))
+all_post_m3 <- sort(which(d$pre_or_post_operation %in% c("post", "post_2",
+                                                        "post_3")))
+
+# Part 2.1
+all_post_actual_m1 <- d$age_actual[all_post_m1]
+all_post_AIage_m1 <- d$ai_model_1[all_post_m1]
+all_post_actual_m2 <- d$age_actual[all_post_m2]
+all_post_AIage_m2 <- d$ai_model_2[all_post_m2]
+all_post_actual_m3 <- d$age_actual[all_post_m3]
+all_post_AIage_m3 <- d$ai_model_3[all_post_m3]
+
+# Part 3.1
+## Correlation (Accuracy)
+all_post_cor_m1 <- cor(all_post_AIage_m1, all_post_actual_m1)
+all_post_cor_m2 <- cor(all_post_AIage_m2, all_post_actual_m2)
+all_post_cor_m3 <- cor(all_post_AIage_m3, all_post_actual_m3)
+
+# Part 4.1
+## Influence Plot (Leverages & Outliers)
+all_post_test_lm_m1 <- lm(all_post_AIage_m1 ~ all_post_actual_m1)
+all_post_ip_m1 <- influencePlot(all_post_test_lm_m1, 
+                               main="All Post-Measurements AI Model 1")
+all_post_ip_m1
+4/length(all_post_actual_m1) ## Hat-values limit for Influcence Plot
+## High Leverage Points: 18, 27, 28 (? > 4/n for Hat-values)
+## Outlier Points: 11, 130 (StudRes is either [-2 > ? > +2])
+## Good Leverage Points: 18, 27, 28 (? > 4/n for Hat values & within [-2 > ? > +2])
+## Bad Leverage Points: N/A (? > 4/n for Hat values & outside [-2 > ? > +2]
+
+all_post_test_lm_m2 <- lm(all_post_AIage_m2 ~ all_post_actual_m2)
+all_post_ip_m2 <- influencePlot(all_post_test_lm_m2, 
+                               main="All Post-Measurements AI Model 2")
+all_post_ip_m2
+4/length(all_post_actual_m2) ## Hat-values limit for Influcence Plot
+## High Leverage Points: 27, 28 (? > 4/n for Hat-values)
+## Outlier Points: 13, 46 (StudRes is either [-2 > ? > +2])
+## Good Leverage Points: 27, 28 (? > 4/n for Hat values & within [-2 > ? > +2])
+## Bad Leverage Points: N/A (? > 4/n for Hat values & outside [-2 > ? > +2]
+
+all_post_test_lm_m3 <- lm(all_post_AIage_m3 ~ all_post_actual_m3)
+all_post_ip_m3 <- influencePlot(all_post_test_lm_m3, 
+                               main="All Post-Measurements AI Model 3")
+all_post_ip_m3
+4/length(all_post_actual_m3) ## Hat-values limit for Influcence Plot
+## High Leverage Points: 26, 27, 28 (? > 4/n for Hat-values)
+## Outlier Points: 26, 68, 130 (StudRes is either [-2 > ? > +2])
+## Good Leverage Points: 27, 28 (? > 4/n for Hat values & within [-2 > ? > +2])
+## Bad Leverage Points: 26 (? > 4/n for Hat values & outside [-2 > ? > +2]
+
+# Part 5.1
+## Run the Linear Regression, MSE (Accuracy), and R-Squared (Explanation of Varaibility)
+all_post_lm_m1 <- lm(all_post_AIage_m1 ~ all_post_actual_m1)
+all_post_MSE_m1 <- mean((all_post_lm_m1$residuals)^2)
+all_post_r_m1 <- summary(all_post_lm_m1)$r.squared
+
+all_post_lm_m2 <- lm(all_post_AIage_m2 ~ all_post_actual_m2)
+all_post_MSE_m2 <- mean((all_post_lm_m2$residuals)^2)
+all_post_r_m2 <- summary(all_post_lm_m2)$r.squared
+
+all_post_lm_m3 <- lm(all_post_AIage_m3 ~ all_post_actual_m3)
+all_post_MSE_m3 <- mean((all_post_lm_m3$residuals)^2)
+all_post_r_m3 <- summary(all_post_lm_m3)$r.squared
+
+# Part 6.1 (Reliability)
+## Correlation b/w Each Models
+all_post_reli_m1.2 <- cor(all_post_AIage_m1, all_post_AIage_m2)
+all_post_reli_m1.3 <- cor(all_post_AIage_m1, all_post_AIage_m3)
+all_post_reli_m2.3 <- cor(all_post_AIage_m2, all_post_AIage_m3)
+```
+
+# Testing for "pre" & "pre_2"
+```{r, warning=FALSE, message=FALSE}
+# Part 1.1
+pre1.2_pre_m1 <- sort(which(d$pre_or_post_operation %in% c("pre", "pre_2")))
+pre1.2_pre_m2 <- sort(which(d$pre_or_post_operation %in% c("pre", "pre_2")))
+pre1.2_pre_m3 <- sort(which(d$pre_or_post_operation %in% c("pre", "pre_2")))
+
+# Part 2.1
+pre1.2_pre_actual_m1 <- d$age_actual[pre1.2_pre_m1]
+pre1.2_pre_AIage_m1 <- d$ai_model_1[pre1.2_pre_m1]
+pre1.2_pre_actual_m2 <- d$age_actual[pre1.2_pre_m2]
+pre1.2_pre_AIage_m2 <- d$ai_model_2[pre1.2_pre_m2]
+pre1.2_pre_actual_m3 <- d$age_actual[pre1.2_pre_m3]
+pre1.2_pre_AIage_m3 <- d$ai_model_3[pre1.2_pre_m3]
+
+# Part 3.1
+## Correlation (Accuracy)
+pre1.2_pre_cor_m1 <- cor(pre1.2_pre_AIage_m1, pre1.2_pre_actual_m1)
+pre1.2_pre_cor_m2 <- cor(pre1.2_pre_AIage_m2, pre1.2_pre_actual_m2)
+pre1.2_pre_cor_m3 <- cor(pre1.2_pre_AIage_m3, pre1.2_pre_actual_m3)
+
+# Part 4.1
+## Influence Plot (Leverages & Outliers)
+pre1.2_pre_test_lm_m1 <- lm(pre1.2_pre_AIage_m1 ~ pre1.2_pre_actual_m1)
+pre1.2_pre_ip_m1 <- influencePlot(pre1.2_pre_test_lm_m1, 
+                               main="Pre & Pre_2 AI Model 1")
+pre1.2_pre_ip_m1
+4/length(pre1.2_pre_actual_m1) ## Hat-values limit for Influcence Plot
+## High Leverage Points: 34, 156 (? > 4/n for Hat-values)
+## Outlier Points: 93, 157 (StudRes is either [-2 > ? > +2])
+## Good Leverage Points: 34, 156 (? > 4/n for Hat values & within [-2 > ? > +2])
+## Bad Leverage Points: N/A (? > 4/n for Hat values & outside [-2 > ? > +2]
+
+pre1.2_pre_test_lm_m2 <- lm(pre1.2_pre_AIage_m2 ~ pre1.2_pre_actual_m2)
+pre1.2_pre_ip_m2 <- influencePlot(pre1.2_pre_test_lm_m2, 
+                               main="Pre & Pre_2 AI Model 2")
+pre1.2_pre_ip_m2
+4/length(pre1.2_pre_actual_m2) ## Hat-values limit for Influcence Plot
+## High Leverage Points: 34, 128, 156 (? > 4/n for Hat-values)
+## Outlier Points: 114, 128, 157 (StudRes is either [-2 > ? > +2])
+## Good Leverage Points: 34, 156 (? > 4/n for Hat values & within [-2 > ? > +2])
+## Bad Leverage Points: 128 (? > 4/n for Hat values & outside [-2 > ? > +2]
+
+pre1.2_pre_test_lm_m3 <- lm(pre1.2_pre_AIage_m3 ~ pre1.2_pre_actual_m3)
+pre1.2_pre_ip_m3 <- influencePlot(pre1.2_pre_test_lm_m3, 
+                               main="Pre & Pre_2 AI Model 3")
+pre1.2_pre_ip_m3
+4/length(pre1.2_pre_actual_m3) ## Hat-values limit for Influcence Plot
+## High Leverage Points: 34, 156 (? > 4/n for Hat-values)
+## Outlier Points: 31, 157 (StudRes is either [-2 > ? > +2])
+## Good Leverage Points: 34, 156 (? > 4/n for Hat values & within [-2 > ? > +2])
+## Bad Leverage Points: N/A (? > 4/n for Hat values & outside [-2 > ? > +2]
+
+# Part 5.1
+## Run the Linear Regression, MSE (Accuracy), and R-Squared (Explanation of Varaibility)
+pre1.2_pre_lm_m1 <- lm(pre1.2_pre_AIage_m1 ~ pre1.2_pre_actual_m1)
+pre1.2_pre_MSE_m1 <- mean((pre1.2_pre_lm_m1$residuals)^2)
+pre1.2_pre_r_m1 <- summary(pre1.2_pre_lm_m1)$r.squared
+
+pre1.2_pre_lm_m2 <- lm(pre1.2_pre_AIage_m2 ~ pre1.2_pre_actual_m2)
+pre1.2_pre_MSE_m2 <- mean((pre1.2_pre_lm_m2$residuals)^2)
+pre1.2_pre_r_m2 <- summary(pre1.2_pre_lm_m2)$r.squared
+
+pre1.2_pre_lm_m3 <- lm(pre1.2_pre_AIage_m3 ~ pre1.2_pre_actual_m3)
+pre1.2_pre_MSE_m3 <- mean((pre1.2_pre_lm_m3$residuals)^2)
+pre1.2_pre_r_m3 <- summary(pre1.2_pre_lm_m3)$r.squared
+
+# Part 6.1 (Reliability)
+## Correlation b/w Each Models
+pre1.2_pre_reli_m1.2 <- cor(pre1.2_pre_AIage_m1, pre1.2_pre_AIage_m2)
+pre1.2_pre_reli_m1.3 <- cor(pre1.2_pre_AIage_m1, pre1.2_pre_AIage_m3)
+pre1.2_pre_reli_m2.3 <- cor(pre1.2_pre_AIage_m2, pre1.2_pre_AIage_m3)
+```
+
+# Testing for "post" & "post_2"
+```{r, warning=FALSE, message=FALSE}
+# Part 1.1
+post1.2_post_m1 <- sort(which(d$pre_or_post_operation %in% c("post", "post_2")))
+post1.2_post_m2 <- sort(which(d$pre_or_post_operation %in% c("post", "post_2")))
+post1.2_post_m3 <- sort(which(d$pre_or_post_operation %in% c("post", "post_2")))
+
+# Part 2.1
+post1.2_post_actual_m1 <- d$age_actual[post1.2_post_m1]
+post1.2_post_AIage_m1 <- d$ai_model_1[post1.2_post_m1]
+post1.2_post_actual_m2 <- d$age_actual[post1.2_post_m2]
+post1.2_post_AIage_m2 <- d$ai_model_2[post1.2_post_m2]
+post1.2_post_actual_m3 <- d$age_actual[post1.2_post_m3]
+post1.2_post_AIage_m3 <- d$ai_model_3[post1.2_post_m3]
+
+# Part 3.1
+## Correlation (Accuracy)
+post1.2_post_cor_m1 <- cor(post1.2_post_AIage_m1, post1.2_post_actual_m1)
+post1.2_post_cor_m2 <- cor(post1.2_post_AIage_m2, post1.2_post_actual_m2)
+post1.2_post_cor_m3 <- cor(post1.2_post_AIage_m3, post1.2_post_actual_m3)
+
+# Part 4.1
+## Influence Plot (Leverages & Outliers)
+post1.2_post_test_lm_m1 <- lm(post1.2_post_AIage_m1 ~ post1.2_post_actual_m1)
+post1.2_post_ip_m1 <- influencePlot(post1.2_post_test_lm_m1, 
+                               main="Post & Post_2 AI Model 1")
+post1.2_post_ip_m1
+4/length(post1.2_post_actual_m1) ## Hat-values limit for Influcence Plot
+## High Leverage Points: 18, 25, 26 (? > 4/n for Hat-values)
+## Outlier Points: 11, 124 (StudRes is either [-2 > ? > +2])
+## Good Leverage Points: 18, 25, 26 (? > 4/n for Hat values & within [-2 > ? > +2])
+## Bad Leverage Points: N/A (? > 4/n for Hat values & outside [-2 > ? > +2]
+
+post1.2_post_test_lm_m2 <- lm(post1.2_post_AIage_m2 ~ post1.2_post_actual_m2)
+post1.2_post_ip_m2 <- influencePlot(post1.2_post_test_lm_m2, 
+                               main="Post & Post_2 AI Model 2")
+post1.2_post_ip_m2
+4/length(post1.2_post_actual_m2) ## Hat-values limit for Influcence Plot
+## High Leverage Points: 25, 26 (? > 4/n for Hat-values)
+## Outlier Points: 13, 88 (StudRes is either [-2 > ? > +2])
+## Good Leverage Points: 25, 26 (? > 4/n for Hat values & within [-2 > ? > +2])
+## Bad Leverage Points: N/A (? > 4/n for Hat values & outside [-2 > ? > +2]
+
+post1.2_post_test_lm_m3 <- lm(post1.2_post_AIage_m3 ~ post1.2_post_actual_m3)
+post1.2_post_ip_m3 <- influencePlot(post1.2_post_test_lm_m3, 
+                               main="Post & Post_2 AI Model 3")
+post1.2_post_ip_m3
+4/length(post1.2_post_actual_m3) ## Hat-values limit for Influcence Plot
+## High Leverage Points: 25, 26, 119 (? > 4/n for Hat-values)
+## Outlier Points: 25, 64, 124 (StudRes is either [-2 > ? > +2])
+## Good Leverage Points: 26, 119 (? > 4/n for Hat values & within [-2 > ? > +2])
+## Bad Leverage Points: 25 (? > 4/n for Hat values & outside [-2 > ? > +2]
+
+# Part 5.1
+## Run the Linear Regression, MSE (Accuracy), and R-Squared (Explanation of Varaibility)
+post1.2_post_lm_m1 <- lm(post1.2_post_AIage_m1 ~ post1.2_post_actual_m1)
+post1.2_post_MSE_m1 <- mean((post1.2_post_lm_m1$residuals)^2)
+post1.2_post_r_m1 <- summary(post1.2_post_lm_m1)$r.squared
+
+post1.2_post_lm_m2 <- lm(post1.2_post_AIage_m2 ~ post1.2_post_actual_m2)
+post1.2_post_MSE_m2 <- mean((post1.2_post_lm_m2$residuals)^2)
+post1.2_post_r_m2 <- summary(post1.2_post_lm_m2)$r.squared
+
+post1.2_post_lm_m3 <- lm(post1.2_post_AIage_m3 ~ post1.2_post_actual_m3)
+post1.2_post_MSE_m3 <- mean((post1.2_post_lm_m3$residuals)^2)
+post1.2_post_r_m3 <- summary(post1.2_post_lm_m3)$r.squared
+
+# Part 6.1 (Reliability)
+## Correlation b/w Each Models
+post1.2_post_reli_m1.2 <- cor(post1.2_post_AIage_m1, post1.2_post_AIage_m2)
+post1.2_post_reli_m1.3 <- cor(post1.2_post_AIage_m1, post1.2_post_AIage_m3)
+post1.2_post_reli_m2.3 <- cor(post1.2_post_AIage_m2, post1.2_post_AIage_m3)
+```
+
+# Testing for BOTH All "pre-measurements" and All "post-measuresments"
+```{r}
+# Part 1.1 -> N/A
+# Part 2.1 -> N/A
+
+# Part 3.1
+## Correlation (Accuracy)
+both_cor_m1 <- cor(d$age_actual, d$ai_model_1)
+both_cor_m2 <- cor(d$age_actual, d$ai_model_2)
+both_cor_m3 <- cor(d$age_actual, d$ai_model_3)
+
+# Part 4.1
+## Influence Plot (Leverages & Outliers)
+both_test_lm_m1 <- lm(d$ai_model_1 ~ d$age_actual)
+both_ip_m1 <- influencePlot(both_test_lm_m1, 
+                               main="Both Measurements AI Model 1 (All Data)")
+both_ip_m1
+4/length(d$age_actual) ## Hat-values limit for Influcence Plot
+## High Leverage Points: 60, 62 (? > 4/n for Hat-values)
+## Outlier Points: 173, 296 (StudRes is either [-2 > ? > +2])
+## Good Leverage Points: 60, 62 (? > 4/n for Hat values & within [-2 > ? > +2])
+## Bad Leverage Points: N/A (? > 4/n for Hat values & outside [-2 > ? > +2]
+
+both_test_lm_m2 <- lm(d$ai_model_2 ~ d$age_actual)
+both_ip_m2 <- influencePlot(both_test_lm_m2, 
+                               main="Both Measurements AI Model 2 (All Data)")
+both_ip_m2
+4/length(d$age_actual) ## Hat-values limit for Influcence Plot
+## High Leverage Points: 60, 62, 63 (? > 4/n for Hat-values)
+## Outlier Points: 33, 216 (StudRes is either [-2 > ? > +2])
+## Good Leverage Points: 60, 62, 63 (? > 4/n for Hat values & within [-2 > ? > +2])
+## Bad Leverage Points: N/A (? > 4/n for Hat values & outside [-2 > ? > +2]
+
+both_test_lm_m3 <- lm(d$ai_model_3 ~ d$age_actual)
+both_ip_m3 <- influencePlot(both_test_lm_m3, 
+                               main="Both Measurements AI Model 3 (All Data)")
+both_ip_m3
+4/length(d$age_actual) ## Hat-values limit for Influcence Plot
+## High Leverage Points: 60, 61, 62, 63 (? > 4/n for Hat-values)
+## Outlier Points: 53, 61, 295 (StudRes is either [-2 > ? > +2])
+## Good Leverage Points: 60, 62, 63 (? > 4/n for Hat values & within [-2 > ? > +2])
+## Bad Leverage Points: 61 (? > 4/n for Hat values & outside [-2 > ? > +2]
+
+# Part 5.1
+## Run the Linear Regression, MSE (Accuracy), and R-Squared (Explanation of Varaibility)
+both_lm_m1 <- lm(d$ai_model_1 ~ d$age_actual)
+both_MSE_m1 <- mean((both_lm_m1$residuals)^2)
+both_r_m1 <- summary(both_lm_m1)$r.squared
+
+both_lm_m2 <- lm(d$ai_model_2 ~ d$age_actual)
+both_MSE_m2 <- mean((both_lm_m2$residuals)^2)
+both_r_m2 <- summary(both_lm_m2)$r.squared
+
+both_lm_m3 <- lm(d$ai_model_3 ~ d$age_actual)
+both_MSE_m3 <- mean((both_lm_m3$residuals)^2)
+both_r_m3 <- summary(both_lm_m3)$r.squared
+
+# Part 6.1 (Reliability)
+## Correlation b/w Each Models
+both_reli_m1.2 <- cor(d$ai_model_1, d$ai_model_2)
+both_reli_m1.3 <- cor(d$ai_model_1, d$ai_model_3)
+both_reli_m2.3 <- cor(d$ai_model_2, d$ai_model_3)
+```
+
+# Bad Leverage Points and Age Difference (Actual vs. AI Age)
+```{r}
+# All Pre-Measures -> point 137
+all_pre_lev_m2 <- d[which(d$pre_or_post_operation %in%
+                            c("pre","pre_2","pre_3")),]
+all_pre_lev_m2[137, c(6,7,9)]
+
+# All Post-Measures -> point 26
+all_post_lev_m3 <- d[which(d$pre_or_post_operation %in%
+                             c("post","post_2","post_3")),]
+all_post_lev_m3[26, c(6,7,10)]
+
+# "pre1" & "pre2" -> point 128
+pre1.2_pre_lev_m2 <- d[which(d$pre_or_post_operation %in%
+                            c("pre","pre_2")),]
+pre1.2_pre_lev_m2[128, c(6,7,9)]
+
+# All Post-Measures -> point 25
+post1.2_post_lev_m3 <- d[which(d$pre_or_post_operation %in%
+                             c("post","post_2")),]
+post1.2_post_lev_m3[25, c(6,7,10)]
+
+# Both Measures (Pre & Post) -> point 61
+both_lev_m3 <- d[which(d$pre_or_post_operation %in%
+                             c("pre","pre_2","pre_3",
+                               "post","post_2","post_3")),]
+both_lev_m3[61, c(6,7,10)]
+
+# Finding the rows that correspond to the whole data
+which(grepl(80.7194, d$age_actual)) ## For Model 2
+which(grepl(36.2138, d$age_actual)) ## For Model 3
+### In the main data, it appears that we have Bad Leverage Points for row 238 (Model 2) and row 61 (Model 3). Let's further observe these Bad Leverage Points
+d[c(61, 238), c(6:10)]
+
+# Seeing how much is the model off by (Actual Age minus AI Model __ Age)
+as.numeric(d[238, 7] - d[238, 9])
+### Model 2 ("pre_2") -> Model 2 predicted the age to be approximately 7 years more than the actual age
+as.numeric(d[61, 7] - d[61, 10])
+### Model 3 ("post") -> Model 3 predicted the age to be approximately 14 years more than the actual age 
+```
+
+# Consolidating All the Comparisons
+```{r}
+# Correlation (Accuracy)
+every_cor_combo <- data.frame(Types_for_Correlation=
+                                c("All Pre-Measures",
+                                  "All Post-Measures",
+                                  "Pre1 & Pre2",
+                                  "Post1 & Post2",
+                                  "Both Pre & Post (All Data)"),
+                              AI_Model_1=
+                                c(all_pre_cor_m1, 
+                                  all_post_cor_m1,
+                                  pre1.2_pre_cor_m1,
+                                  post1.2_post_cor_m1,
+                                  both_cor_m1),
+                              AI_Model_2=
+                                c(all_pre_cor_m2,
+                                  all_post_cor_m2,
+                                  pre1.2_pre_cor_m2,
+                                  post1.2_post_cor_m2,
+                                  both_cor_m2),
+                              AI_Model_3=
+                                c(all_pre_cor_m3, 
+                                  all_post_cor_m3,
+                                  pre1.2_pre_cor_m3,
+                                  post1.2_post_cor_m3,
+                                  both_cor_m3))
+
+
+# MSE (Accuracy)
+every_MSE_combo <- data.frame(Types_for_MSE=
+                                c("All Pre-Measures",
+                                  "All Post-Measures",
+                                  "Pre1 & Pre2",
+                                  "Post1 & Post2",
+                                  "Both Pre & Post (All Data)"),
+                              AI_Model_1=
+                                c(all_pre_MSE_m1,
+                                  all_post_MSE_m1,
+                                  pre1.2_pre_MSE_m1,
+                                  post1.2_post_MSE_m1,
+                                  both_MSE_m1),
+                              AI_Model_2=
+                                c(all_pre_MSE_m2,
+                                  all_post_MSE_m2,
+                                  pre1.2_pre_MSE_m2,
+                                  post1.2_post_MSE_m2,
+                                  both_MSE_m2),
+                              AI_Model_3=
+                                c(all_pre_MSE_m3,
+                                  all_post_MSE_m3,
+                                  pre1.2_pre_MSE_m3, 
+                                  post1.2_post_MSE_m3,
+                                  both_MSE_m3))
+
+
+# R-Squared (Explanation of Variability)
+every_Rsq_combo <- data.frame(Types_for_R_Squared=
+                                c("All Pre-Measures",
+                                  "All Post-Measures",
+                                  "Pre1 & Pre2",
+                                  "Post1 & Post2",
+                                  "Both Pre & Post (All Data)"),
+                                AI_Model_1=
+                                c(all_pre_r_m1,
+                                  all_post_r_m1,
+                                  pre1.2_pre_r_m1,
+                                  post1.2_post_r_m1,
+                                  both_r_m1),
+                                AI_Model_2=
+                                c(all_pre_r_m2,
+                                  all_post_r_m2,
+                                  pre1.2_pre_r_m2,
+                                  post1.2_post_r_m2,
+                                  both_r_m2),
+                                AI_Model_3=
+                                c(all_pre_r_m3,
+                                  all_post_r_m3,
+                                  pre1.2_pre_r_m3,
+                                  post1.2_post_r_m3,
+                                  both_r_m3))
+
+# Show the Comparisons for Correlations, MSE, and R-Squared
+every_cor_combo
+every_MSE_combo
+every_Rsq_combo
+```
+
+# Set Up Work for Correlation
+```{r}
+# Set up conditions
+all_pre_m1 <- sort(which(d$pre_or_post_operation %in% c("pre", "pre_2",
+                                                        "pre_3")))
+all_pre_m2 <- sort(which(d$pre_or_post_operation %in% c("pre", "pre_2",
+                                                        "pre_3")))
+all_pre_m3 <- sort(which(d$pre_or_post_operation %in% c("pre", "pre_2",
+                                                        "pre_3")))
+all_post_m1 <- sort(which(d$pre_or_post_operation %in% c("post", "post_2",
+                                                        "post_3")))
+all_post_m2 <- sort(which(d$pre_or_post_operation %in% c("post", "post_2",
+                                                        "post_3")))
+all_post_m3 <- sort(which(d$pre_or_post_operation %in% c("post", "post_2",
+                                                        "post_3")))
+pre1.2_pre_m1 <- sort(which(d$pre_or_post_operation %in% c("pre", "pre_2")))
+pre1.2_pre_m2 <- sort(which(d$pre_or_post_operation %in% c("pre", "pre_2")))
+pre1.2_pre_m3 <- sort(which(d$pre_or_post_operation %in% c("pre", "pre_2")))
+post1.2_post_m1 <- sort(which(d$pre_or_post_operation %in% c("post", "post_2")))
+post1.2_post_m2 <- sort(which(d$pre_or_post_operation %in% c("post", "post_2")))
+post1.2_post_m3 <- sort(which(d$pre_or_post_operation %in% c("post", "post_2")))
+
+# Apply the conditions
+all_pre_actual_m1 <- d$age_actual[all_pre_m1]
+all_pre_AIage_m1 <- d$ai_model_1[all_pre_m1]
+all_pre_actual_m2 <- d$age_actual[all_pre_m2]
+all_pre_AIage_m2 <- d$ai_model_2[all_pre_m2]
+all_pre_actual_m3 <- d$age_actual[all_pre_m3]
+all_pre_AIage_m3 <- d$ai_model_3[all_pre_m3]
+all_post_actual_m1 <- d$age_actual[all_post_m1]
+all_post_AIage_m1 <- d$ai_model_1[all_post_m1]
+all_post_actual_m2 <- d$age_actual[all_post_m2]
+all_post_AIage_m2 <- d$ai_model_2[all_post_m2]
+all_post_actual_m3 <- d$age_actual[all_post_m3]
+all_post_AIage_m3 <- d$ai_model_3[all_post_m3]
+pre1.2_pre_actual_m1 <- d$age_actual[pre1.2_pre_m1]
+pre1.2_pre_AIage_m1 <- d$ai_model_1[pre1.2_pre_m1]
+pre1.2_pre_actual_m2 <- d$age_actual[pre1.2_pre_m2]
+pre1.2_pre_AIage_m2 <- d$ai_model_2[pre1.2_pre_m2]
+pre1.2_pre_actual_m3 <- d$age_actual[pre1.2_pre_m3]
+pre1.2_pre_AIage_m3 <- d$ai_model_3[pre1.2_pre_m3]
+post1.2_post_actual_m1 <- d$age_actual[post1.2_post_m1]
+post1.2_post_AIage_m1 <- d$ai_model_1[post1.2_post_m1]
+post1.2_post_actual_m2 <- d$age_actual[post1.2_post_m2]
+post1.2_post_AIage_m2 <- d$ai_model_2[post1.2_post_m2]
+post1.2_post_actual_m3 <- d$age_actual[post1.2_post_m3]
+post1.2_post_AIage_m3 <- d$ai_model_3[post1.2_post_m3]
+
+# Set up the Dataframes
+all_pre_df <- data.frame(Actual=all_pre_actual_m1,
+                         Model_1=all_pre_AIage_m1, 
+                         Model_2=all_pre_AIage_m2, 
+                         Model_3=all_pre_AIage_m3)
+all_post_df <- data.frame(Actual=all_post_actual_m1,
+                          Model_1=all_post_AIage_m1,
+                          Model_2=all_post_AIage_m2,
+                          Model_3=all_post_AIage_m3)
+pre1.2_pre_df <- data.frame(Actual=pre1.2_pre_actual_m1,
+                            Model_1=pre1.2_pre_AIage_m1,
+                            Model_2=pre1.2_pre_AIage_m2, 
+                            Model_3=pre1.2_pre_AIage_m3)
+post1.2_post_df <- data.frame(Actual=post1.2_post_actual_m1,
+                              Model_1=post1.2_post_AIage_m1,
+                              Model_2=post1.2_post_AIage_m2,
+                              Model_3=post1.2_post_AIage_m3)
+both_df <- data.frame(Actual=d$age_actual,
+                      Model_1=d$ai_model_1, 
+                      Model_2=d$ai_model_2, 
+                      Model_3=d$ai_model_3)
+```
+
+
+# Correlation Matrix (Reliability)
+**Note:** All the Actuals for Each AI Models have the same Actual Ages.
+```{r}
+# All Pre-Measures
+lowerCor(all_pre_df, method="pearson")
+
+# All Post-Measures
+lowerCor(all_post_df, method="pearson")
+
+# Pre1 & Pre2
+lowerCor(pre1.2_pre_df, method="pearson")
+
+# Post1 & Post2
+lowerCor(post1.2_post_df, method="pearson")
+
+# Both Pre/Post-Measures (All Data)
+lowerCor(both_df, method="pearson")
+```
+
+# Check Statistically Significant & Reproduciblity
+1) P-value: how statistically significant they are (has to be lower than 0.05)
+2) CI (Confidence Interval): This means that calculates 95% confidence intervals around the correlation value R. This means that if we repeated the experiment many times with datasets drawn from the same population the calculated confident intervals would contain the true value at 95% of the time these confidence intervals.
+```{r}
+# All Pre-Measures
+corr.test(all_pre_df, use="pairwise.complete.obs")$ci[1:3,]
+
+# All Post-Measures
+corr.test(all_post_df, use="pairwise.complete.obs")$ci[1:3,]
+
+# Pre1 & Pre2
+corr.test(pre1.2_pre_df, use="pairwise.complete.obs")$ci[1:3,]
+
+# Post1 & Post2
+corr.test(post1.2_post_df, use="pairwise.complete.obs")$ci[1:3,]
+
+# Both Pre/Post-Measures (All Data)
+corr.test(both_df, use="pairwise.complete.obs")$ci[1:3,]
+```
+
+# Checking Reliability & Consistency
+```{r, warning=FALSE, message=FALSE}
+# Note: $alpha == splitHalf(...)[8] == "Average split half reliability"
+
+# All Pre-Measures
+alpha(all_pre_df)[3] # (? > 0.80 -> reliable)
+splitHalf(all_pre_df)[8] # shows consistency (? > 0.80 -> consistent)
+
+# All Post-Measures
+alpha(all_post_df)[3] # (? > 0.80 -> reliable)
+splitHalf(all_post_df)[8] # shows consistency (? > 0.80 -> consistent)
+
+# Pre1 & Pre2
+alpha(pre1.2_pre_df)[3] # (? > 0.80 -> reliable)
+splitHalf(pre1.2_pre_df)[8] # shows consistency (? > 0.80 -> consistent)
+
+# Post1 & Post2
+alpha(post1.2_post_df)[3] # (? > 0.80 -> reliable)
+splitHalf(post1.2_post_df)[8] # shows consistency (? > 0.80 -> consistent)
+
+# Both Pre/Post-Measures (All Data)
+alpha(both_df)[3] # (? > 0.80 -> reliable)
+splitHalf(both_df)[8] # shows consistency (? > 0.80 -> consistent)
+```
+
+
+
+
+
+# Significant Variables
+```{r}
+# Only used Model 3 since it was the best out of them all AI models.
+sig_var_aov_m1 <- aov(diff_m3 ~ d$`f-number` + d$`exposure time` +
+                        d$`focal length` + d$make + d$model + 
+                        d$sensitivity + d$dimensions, data=d)
+sig_var_aov_m2 <- aov(diff_m3 ~ d$`MRD1-right` + d$`MRD2-right` + 
+                        d$`PTB-right` + d$`TPS-right` + d$`MRD1-left` +
+                        d$`MRD2-left` + d$`PTB-left`, data=d)
+
+summary(sig_var_aov_m1)
+summary(sig_var_aov_m2)
+```
+
+
+
+
+# Accuracy & MSE & Older/Younger Predictions
+```{r, echo=TRUE, results='hide', message=FALSE}
+library(readr)
+library(dplyr)
+library(tidyverse)
+library(ggplot2)
+setwd(getwd())
+d <- read_csv("Code_Sheet_Age_Project_Apr_26.csv")
+```
+
+```{r}
+model1 <- lm(data = d, age_actual ~ ai_model_1)
+model2 <- lm(data = d, age_actual ~ ai_model_2)
+model3 <- lm(data = d, age_actual ~ ai_model_3)
+
+SE1 <- (model1$residuals)^2
+SE2 <- (model2$residuals)^2
+SE3 <- (model3$residuals)^2
+
+MSE1 <- mean(SE1)
+MSE2 <- mean(SE2)
+MSE3 <- mean(SE3)
+
+alls <- c(MSE1, MSE2, MSE3)
+```
+
+```{r}
+pre <- d %>% filter(pre_or_post_operation == "pre")
+
+pre1 <- lm(data = pre, age_actual ~ ai_model_1)
+pre2 <- lm(data = pre, age_actual ~ ai_model_2)
+pre3 <- lm(data = pre, age_actual ~ ai_model_3)
+
+preMSE1 <- mean((pre1$residuals)^2)
+preMSE2 <- mean((pre2$residuals)^2)
+preMSE3 <- mean((pre3$residuals)^2)
+
+pres <- c(preMSE1, preMSE2, preMSE3)
+```
+
+```{r}
+pre2 <- d %>% filter(pre_or_post_operation == "pre_2")
+
+pre_1 <- lm(data = pre2, age_actual ~ ai_model_1)
+pre_2 <- lm(data = pre2, age_actual ~ ai_model_2)
+pre_3 <- lm(data = pre2, age_actual ~ ai_model_3)
+
+pre_MSE1 <- mean((pre_1$residuals)^2)
+pre_MSE2 <- mean((pre_2$residuals)^2)
+pre_MSE3 <- mean((pre_3$residuals)^2)
+
+pre_s <- c(pre_MSE1, pre_MSE2, pre_MSE3)
+```
+
+```{r}
+post <- d %>% filter(pre_or_post_operation == "post")
+
+post1 <- lm(data = post, age_actual ~ ai_model_1)
+post2 <- lm(data = post, age_actual ~ ai_model_2)
+post3 <- lm(data = post, age_actual ~ ai_model_3)
+
+postMSE1 <- mean((post1$residuals)^2)
+postMSE2 <- mean((post2$residuals)^2)
+postMSE3 <- mean((post3$residuals)^2)
+
+posts <- c(postMSE1, postMSE2, postMSE3)
+```
+
+```{r}
+MSE_data <- data.frame(model = c("ai_model_1", "ai_model_2", "ai_model_3"), 
+                       alls, pres, pre_s, posts)
+
+
+ggplot(data = MSE_data, aes(model, alls, color = "All Data")) +
+  geom_point(size = 5) +
+  geom_point(aes(model, pres, color = "Pre"), size = 5) +
+  geom_point(aes(model, pre_s, color = "Pre_2"), size = 5) +
+  geom_point(aes(model, posts, color = "Post"), size = 5) +
+  xlab("Model") + 
+  ylab("Mean Squared Error (MSE)") + 
+  ggtitle("MSE by Model and Time of Picture (Lower MSE is Better)") +
+  guides(col = guide_legend("Time of Picture\nRelative to Operation")) +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+
+
+
+
+
+
+# Correlations of Coefficients for Accuracy
+```{r}
+library(readxl)
+library(tidyverse)
+d <- read_excel("Code_Sheet_Age_Project_Apr_26.xlsx")
+```
+
+# Correlation plots
+## Working with pre operation data only
+```{r}
+d1 <- d %>% filter(pre_or_post_operation=="pre"|pre_or_post_operation=="pre_2"|pre_or_post_operation=="pre_3")
+
+m1 <- lm(ai_model_1~age_actual, d1)
+ggplot(d1, aes(age_actual, ai_model_1)) + geom_point(color="red") + stat_smooth(method="lm", color="red")
+summary(m1)
+
+m2 <- lm(ai_model_2~age_actual, d1)
+ggplot(d1, aes(age_actual, ai_model_2)) + geom_point(color="blue") + stat_smooth(method="lm", color="blue")
+summary(m2)
+
+m3 <- lm(ai_model_3~age_actual, d1)
+ggplot(d1, aes(age_actual, ai_model_3)) + geom_point(color="green") + stat_smooth(method="lm", color="green")
+summary(m3)
+
+d2 <- d1 %>% select(age_actual, ai_model_1, ai_model_2, ai_model_3) %>% gather("model", "age_predict", 2:4)
+
+ggplot(d2, aes(age_actual, age_predict)) + geom_point(aes(color=factor(model))) + stat_smooth(method="lm", aes(color=factor(model)))
+```
+
+# Comparing coefficients of correlation
+```{r}
+## used online calculator the professor shared with us: https://www.psychometrica.de/correlation.html
+
+## n = 169
+## model 1 r = 0.8402976
+## model 2 r = 0.8768694
+## model 3 r = 0.9011104
+```
+
+## Comparison of correlations from dependent samples (across all 3 models)
+
+Test statistic z = -2.238
+Probability p = 0.013
+
+## Model 1 vs Model 2
+
+Test statistic z = -1.274
+Probability p = 0.101
+
+## Model 1 vs Model 3
+
+Test statistic z = -2.331
+Probability p = 0.01
+
+## Model 2 vs Model 3
+
+Test statistic z = -1.057
+Probability p = 0.145

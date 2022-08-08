@@ -1,0 +1,61 @@
+---
+title: "Stats141XP - Final Project (Accuracy)"
+author: "Gloria Won"
+date: "5/19/2021"
+output: pdf_document
+---
+
+```{r}
+library(readxl)
+library(tidyverse)
+d <- read_excel("Code_Sheet_Age_Project_Apr_26.xlsx")
+```
+
+# Correlation plots
+## Working with pre operation data only
+
+```{r}
+d1 <- d %>% filter(pre_or_post_operation=="pre"|pre_or_post_operation=="pre_2"|pre_or_post_operation=="pre_3")
+
+m1 <- lm(ai_model_1~age_actual, d1)
+ggplot(d1, aes(age_actual, ai_model_1)) + geom_point(color="red") + stat_smooth(method="lm", color="red")
+summary(m1)
+
+m2 <- lm(ai_model_2~age_actual, d1)
+ggplot(d1, aes(age_actual, ai_model_2)) + geom_point(color="blue") + stat_smooth(method="lm", color="blue")
+summary(m2)
+
+m3 <- lm(ai_model_3~age_actual, d1)
+ggplot(d1, aes(age_actual, ai_model_3)) + geom_point(color="green") + stat_smooth(method="lm", color="green")
+summary(m3)
+
+d2 <- d1 %>% select(age_actual, ai_model_1, ai_model_2, ai_model_3) %>% gather("model", "age_predict", 2:4)
+
+ggplot(d2, aes(age_actual, age_predict)) + geom_point(aes(color=factor(model))) + stat_smooth(method="lm", aes(color=factor(model)))
+```
+
+# Comparing coefficients of correlation
+
+```{r}
+## used online calculator the professor shared with us: https://www.psychometrica.de/correlation.html
+
+## n = 169
+## model 1 r = 0.8402976
+## model 2 r = 0.8768694
+## model 3 r = 0.9011104
+```
+
+## Model 1 vs Model 2
+
+Test statistic z = -1.274
+Probability p = 0.101
+
+## Model 1 vs Model 3
+
+Test statistic z = -2.331
+Probability p = 0.01
+
+## Model 2 vs Model 3
+
+Test statistic z = -1.057
+Probability p = 0.145

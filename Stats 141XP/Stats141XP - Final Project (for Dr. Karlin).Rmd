@@ -1,0 +1,391 @@
+---
+title: "Stats141XP - Final Project (Cleaned)"
+author: "Charles Liu (304804942)"
+date: "4/30/2021"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+
+# Loading Necessary Packages
+```{r, warning=FALSE, message=FALSE}
+library(readr)
+library(ggplot2)
+library(tidyverse)
+library(corrplot)
+library(gplots)
+library(ggpubr)
+library(car)
+```
+
+# Loading Necessary Data
+```{r, warning=FALSE, message=FALSE}
+setwd(getwd())
+d <- read_csv("Code_Sheet_Age_Project_Apr_26.csv")
+```
+
+# Testing for ALL "pre-measurements"
+```{r, warning=FALSE, message=FALSE}
+# Part 1.1
+all_pre_m1 <- sort(which(d$pre_or_post_operation %in% c("pre", "pre_2",
+                                                        "pre_3")))
+all_pre_m2 <- sort(which(d$pre_or_post_operation %in% c("pre", "pre_2",
+                                                        "pre_3")))
+all_pre_m3 <- sort(which(d$pre_or_post_operation %in% c("pre", "pre_2",
+                                                        "pre_3")))
+
+# Part 2.1
+all_pre_actual_m1 <- d$age_actual[all_pre_m1]
+all_pre_AIage_m1 <- d$ai_model_1[all_pre_m1]
+all_pre_actual_m2 <- d$age_actual[all_pre_m2]
+all_pre_AIage_m2 <- d$ai_model_2[all_pre_m2]
+all_pre_actual_m3 <- d$age_actual[all_pre_m3]
+all_pre_AIage_m3 <- d$ai_model_3[all_pre_m3]
+
+# Part 3.1
+## Correlation (Accuracy)
+all_pre_cor_m1 <- cor(all_pre_AIage_m1, all_pre_actual_m1)
+all_pre_cor_m2 <- cor(all_pre_AIage_m2, all_pre_actual_m2)
+all_pre_cor_m3 <- cor(all_pre_AIage_m3, all_pre_actual_m3)
+
+# Part 5.1
+## Run the Linear Regression, MSE (Accuracy), and R-Squared (Explanation of Varaibility)
+all_pre_lm_m1 <- lm(all_pre_AIage_m1 ~ all_pre_actual_m1)
+all_pre_MSE_m1 <- mean((all_pre_lm_m1$residuals)^2)
+all_pre_r_m1 <- summary(all_pre_lm_m1)$r.squared
+
+all_pre_lm_m2 <- lm(all_pre_AIage_m2 ~ all_pre_actual_m2)
+all_pre_MSE_m2 <- mean((all_pre_lm_m2$residuals)^2)
+all_pre_r_m2 <- summary(all_pre_lm_m2)$r.squared
+
+all_pre_lm_m3 <- lm(all_pre_AIage_m3 ~ all_pre_actual_m3)
+all_pre_MSE_m3 <- mean((all_pre_lm_m3$residuals)^2)
+all_pre_r_m3 <- summary(all_pre_lm_m3)$r.squared
+
+# Part 6.1 (Reliability)
+## Correlation b/w Each Models
+all_pre_reli_m1.2 <- cor(all_pre_AIage_m1, all_pre_AIage_m2)
+all_pre_reli_m1.3 <- cor(all_pre_AIage_m1, all_pre_AIage_m3)
+all_pre_reli_m2.3 <- cor(all_pre_AIage_m2, all_pre_AIage_m3)
+```
+
+# Testing for ALL "post-measurements"
+```{r, warning=FALSE, message=FALSE}
+# Part 1.1
+all_post_m1 <- sort(which(d$pre_or_post_operation %in% c("post", "post_2",
+                                                        "post_3")))
+all_post_m2 <- sort(which(d$pre_or_post_operation %in% c("post", "post_2",
+                                                        "post_3")))
+all_post_m3 <- sort(which(d$pre_or_post_operation %in% c("post", "post_2",
+                                                        "post_3")))
+
+# Part 2.1
+all_post_actual_m1 <- d$age_actual[all_post_m1]
+all_post_AIage_m1 <- d$ai_model_1[all_post_m1]
+all_post_actual_m2 <- d$age_actual[all_post_m2]
+all_post_AIage_m2 <- d$ai_model_2[all_post_m2]
+all_post_actual_m3 <- d$age_actual[all_post_m3]
+all_post_AIage_m3 <- d$ai_model_3[all_post_m3]
+
+# Part 3.1
+## Correlation (Accuracy)
+all_post_cor_m1 <- cor(all_post_AIage_m1, all_post_actual_m1)
+all_post_cor_m2 <- cor(all_post_AIage_m2, all_post_actual_m2)
+all_post_cor_m3 <- cor(all_post_AIage_m3, all_post_actual_m3)
+
+# Part 5.1
+## Run the Linear Regression, MSE (Accuracy), and R-Squared (Explanation of Varaibility)
+all_post_lm_m1 <- lm(all_post_AIage_m1 ~ all_post_actual_m1)
+all_post_MSE_m1 <- mean((all_post_lm_m1$residuals)^2)
+all_post_r_m1 <- summary(all_post_lm_m1)$r.squared
+
+all_post_lm_m2 <- lm(all_post_AIage_m2 ~ all_post_actual_m2)
+all_post_MSE_m2 <- mean((all_post_lm_m2$residuals)^2)
+all_post_r_m2 <- summary(all_post_lm_m2)$r.squared
+
+all_post_lm_m3 <- lm(all_post_AIage_m3 ~ all_post_actual_m3)
+all_post_MSE_m3 <- mean((all_post_lm_m3$residuals)^2)
+all_post_r_m3 <- summary(all_post_lm_m3)$r.squared
+
+# Part 6.1 (Reliability)
+## Correlation b/w Each Models
+all_post_reli_m1.2 <- cor(all_post_AIage_m1, all_post_AIage_m2)
+all_post_reli_m1.3 <- cor(all_post_AIage_m1, all_post_AIage_m3)
+all_post_reli_m2.3 <- cor(all_post_AIage_m2, all_post_AIage_m3)
+```
+
+# Testing for "pre" & "pre_2"
+```{r, warning=FALSE, message=FALSE}
+# Part 1.1
+pre1.2_pre_m1 <- sort(which(d$pre_or_post_operation %in% c("pre", "pre_2")))
+pre1.2_pre_m2 <- sort(which(d$pre_or_post_operation %in% c("pre", "pre_2")))
+pre1.2_pre_m3 <- sort(which(d$pre_or_post_operation %in% c("pre", "pre_2")))
+
+# Part 2.1
+pre1.2_pre_actual_m1 <- d$age_actual[pre1.2_pre_m1]
+pre1.2_pre_AIage_m1 <- d$ai_model_1[pre1.2_pre_m1]
+pre1.2_pre_actual_m2 <- d$age_actual[pre1.2_pre_m2]
+pre1.2_pre_AIage_m2 <- d$ai_model_2[pre1.2_pre_m2]
+pre1.2_pre_actual_m3 <- d$age_actual[pre1.2_pre_m3]
+pre1.2_pre_AIage_m3 <- d$ai_model_3[pre1.2_pre_m3]
+
+# Part 3.1
+## Correlation (Accuracy)
+pre1.2_pre_cor_m1 <- cor(pre1.2_pre_AIage_m1, pre1.2_pre_actual_m1)
+pre1.2_pre_cor_m2 <- cor(pre1.2_pre_AIage_m2, pre1.2_pre_actual_m2)
+pre1.2_pre_cor_m3 <- cor(pre1.2_pre_AIage_m3, pre1.2_pre_actual_m3)
+
+# Part 5.1
+## Run the Linear Regression, MSE (Accuracy), and R-Squared (Explanation of Varaibility)
+pre1.2_pre_lm_m1 <- lm(pre1.2_pre_AIage_m1 ~ pre1.2_pre_actual_m1)
+pre1.2_pre_MSE_m1 <- mean((pre1.2_pre_lm_m1$residuals)^2)
+pre1.2_pre_r_m1 <- summary(pre1.2_pre_lm_m1)$r.squared
+
+pre1.2_pre_lm_m2 <- lm(pre1.2_pre_AIage_m2 ~ pre1.2_pre_actual_m2)
+pre1.2_pre_MSE_m2 <- mean((pre1.2_pre_lm_m2$residuals)^2)
+pre1.2_pre_r_m2 <- summary(pre1.2_pre_lm_m2)$r.squared
+
+pre1.2_pre_lm_m3 <- lm(pre1.2_pre_AIage_m3 ~ pre1.2_pre_actual_m3)
+pre1.2_pre_MSE_m3 <- mean((pre1.2_pre_lm_m3$residuals)^2)
+pre1.2_pre_r_m3 <- summary(pre1.2_pre_lm_m3)$r.squared
+
+# Part 6.1 (Reliability)
+## Correlation b/w Each Models
+pre1.2_pre_reli_m1.2 <- cor(pre1.2_pre_AIage_m1, pre1.2_pre_AIage_m2)
+pre1.2_pre_reli_m1.3 <- cor(pre1.2_pre_AIage_m1, pre1.2_pre_AIage_m3)
+pre1.2_pre_reli_m2.3 <- cor(pre1.2_pre_AIage_m2, pre1.2_pre_AIage_m3)
+```
+
+# Testing for "post" & "post_2"
+```{r, warning=FALSE, message=FALSE}
+# Part 1.1
+post1.2_post_m1 <- sort(which(d$pre_or_post_operation %in% c("post", "post_2")))
+post1.2_post_m2 <- sort(which(d$pre_or_post_operation %in% c("post", "post_2")))
+post1.2_post_m3 <- sort(which(d$pre_or_post_operation %in% c("post", "post_2")))
+
+# Part 2.1
+post1.2_post_actual_m1 <- d$age_actual[post1.2_post_m1]
+post1.2_post_AIage_m1 <- d$ai_model_1[post1.2_post_m1]
+post1.2_post_actual_m2 <- d$age_actual[post1.2_post_m2]
+post1.2_post_AIage_m2 <- d$ai_model_2[post1.2_post_m2]
+post1.2_post_actual_m3 <- d$age_actual[post1.2_post_m3]
+post1.2_post_AIage_m3 <- d$ai_model_3[post1.2_post_m3]
+
+# Part 3.1
+## Correlation (Accuracy)
+post1.2_post_cor_m1 <- cor(post1.2_post_AIage_m1, post1.2_post_actual_m1)
+post1.2_post_cor_m2 <- cor(post1.2_post_AIage_m2, post1.2_post_actual_m2)
+post1.2_post_cor_m3 <- cor(post1.2_post_AIage_m3, post1.2_post_actual_m3)
+
+# Part 5.1
+## Run the Linear Regression, MSE (Accuracy), and R-Squared (Explanation of Varaibility)
+post1.2_post_lm_m1 <- lm(post1.2_post_AIage_m1 ~ post1.2_post_actual_m1)
+post1.2_post_MSE_m1 <- mean((post1.2_post_lm_m1$residuals)^2)
+post1.2_post_r_m1 <- summary(post1.2_post_lm_m1)$r.squared
+
+post1.2_post_lm_m2 <- lm(post1.2_post_AIage_m2 ~ post1.2_post_actual_m2)
+post1.2_post_MSE_m2 <- mean((post1.2_post_lm_m2$residuals)^2)
+post1.2_post_r_m2 <- summary(post1.2_post_lm_m2)$r.squared
+
+post1.2_post_lm_m3 <- lm(post1.2_post_AIage_m3 ~ post1.2_post_actual_m3)
+post1.2_post_MSE_m3 <- mean((post1.2_post_lm_m3$residuals)^2)
+post1.2_post_r_m3 <- summary(post1.2_post_lm_m3)$r.squared
+
+# Part 6.1 (Reliability)
+## Correlation b/w Each Models
+post1.2_post_reli_m1.2 <- cor(post1.2_post_AIage_m1, post1.2_post_AIage_m2)
+post1.2_post_reli_m1.3 <- cor(post1.2_post_AIage_m1, post1.2_post_AIage_m3)
+post1.2_post_reli_m2.3 <- cor(post1.2_post_AIage_m2, post1.2_post_AIage_m3)
+```
+
+# Testing for BOTH All "pre-measurements" and All "post-measuresments"
+```{r}
+# Part 1.1 -> N/A
+# Part 2.1 -> N/A
+
+# Part 3.1
+## Correlation (Accuracy)
+both_cor_m1 <- cor(d$age_actual, d$ai_model_1)
+both_cor_m2 <- cor(d$age_actual, d$ai_model_2)
+both_cor_m3 <- cor(d$age_actual, d$ai_model_3)
+
+# Part 5.1
+## Run the Linear Regression, MSE (Accuracy), and R-Squared (Explanation of Varaibility)
+both_lm_m1 <- lm(d$ai_model_1 ~ d$age_actual)
+both_MSE_m1 <- mean((both_lm_m1$residuals)^2)
+both_r_m1 <- summary(both_lm_m1)$r.squared
+
+both_lm_m2 <- lm(d$ai_model_2 ~ d$age_actual)
+both_MSE_m2 <- mean((both_lm_m2$residuals)^2)
+both_r_m2 <- summary(both_lm_m2)$r.squared
+
+both_lm_m3 <- lm(d$ai_model_3 ~ d$age_actual)
+both_MSE_m3 <- mean((both_lm_m3$residuals)^2)
+both_r_m3 <- summary(both_lm_m3)$r.squared
+
+# Part 6.1 (Reliability)
+## Correlation b/w Each Models
+both_reli_m1.2 <- cor(d$ai_model_1, d$ai_model_2)
+both_reli_m1.3 <- cor(d$ai_model_1, d$ai_model_3)
+both_reli_m2.3 <- cor(d$ai_model_2, d$ai_model_3)
+```
+
+# Consolidating All the Comparisons
+```{r}
+# Correlation (Accuracy)
+every_cor_combo <- data.frame(Types_for_Correlation=
+                                c("All Pre-Measures",
+                                  "All Post-Measures",
+                                  "Pre1 & Pre2",
+                                  "Post1 & Post2",
+                                  "Both Pre & Post (All Data)"),
+                              AI_Model_1=
+                                c(all_pre_cor_m1, 
+                                  all_post_cor_m1,
+                                  pre1.2_pre_cor_m1,
+                                  post1.2_post_cor_m1,
+                                  both_cor_m1),
+                              AI_Model_2=
+                                c(all_pre_cor_m2,
+                                  all_post_cor_m2,
+                                  pre1.2_pre_cor_m2,
+                                  post1.2_post_cor_m2,
+                                  both_cor_m2),
+                              AI_Model_3=
+                                c(all_pre_cor_m3, 
+                                  all_post_cor_m3,
+                                  pre1.2_pre_cor_m3,
+                                  post1.2_post_cor_m3,
+                                  both_cor_m3))
+
+
+# MSE (Accuracy)
+every_MSE_combo <- data.frame(Types_for_MSE=
+                                c("All Pre-Measures",
+                                  "All Post-Measures",
+                                  "Pre1 & Pre2",
+                                  "Post1 & Post2",
+                                  "Both Pre & Post (All Data)"),
+                              AI_Model_1=
+                                c(all_pre_MSE_m1,
+                                  all_post_MSE_m1,
+                                  pre1.2_pre_MSE_m1,
+                                  post1.2_post_MSE_m1,
+                                  both_MSE_m1),
+                              AI_Model_2=
+                                c(all_pre_MSE_m2,
+                                  all_post_MSE_m2,
+                                  pre1.2_pre_MSE_m2,
+                                  post1.2_post_MSE_m2,
+                                  both_MSE_m2),
+                              AI_Model_3=
+                                c(all_pre_MSE_m3,
+                                  all_post_MSE_m3,
+                                  pre1.2_pre_MSE_m3, 
+                                  post1.2_post_MSE_m3,
+                                  both_MSE_m3))
+
+
+# R-Squared (Explanation of Variability)
+every_Rsq_combo <- data.frame(Types_for_R_Squared=
+                                c("All Pre-Measures",
+                                  "All Post-Measures",
+                                  "Pre1 & Pre2",
+                                  "Post1 & Post2",
+                                  "Both Pre & Post (All Data)"),
+                                AI_Model_1=
+                                c(all_pre_r_m1,
+                                  all_post_r_m1,
+                                  pre1.2_pre_r_m1,
+                                  post1.2_post_r_m1,
+                                  both_r_m1),
+                                AI_Model_2=
+                                c(all_pre_r_m2,
+                                  all_post_r_m2,
+                                  pre1.2_pre_r_m2,
+                                  post1.2_post_r_m2,
+                                  both_r_m2),
+                                AI_Model_3=
+                                c(all_pre_r_m3,
+                                  all_post_r_m3,
+                                  pre1.2_pre_r_m3,
+                                  post1.2_post_r_m3,
+                                  both_r_m3))
+
+
+# Correlation b/w Models (Reliability)
+every_reli_combo <- data.frame(Types_for_Correlation_bw_Models=
+                                c("All Pre-Measures",
+                                  "All Post-Measures",
+                                  "Pre1 & Pre2",
+                                  "Post1 & Post2",
+                                  "Both Pre & Post (All Data)"),
+                                AI_Models_1.2=
+                                c(all_pre_reli_m1.2,
+                                  all_post_reli_m1.2,
+                                  pre1.2_pre_reli_m1.2,
+                                  post1.2_post_reli_m1.2,
+                                  both_reli_m1.2),
+                                AI_Models_1.3=
+                                c(all_pre_reli_m1.3,
+                                  all_post_reli_m1.3,
+                                  pre1.2_pre_reli_m1.3,
+                                  post1.2_post_reli_m1.3,
+                                  both_reli_m1.3),
+                                AI_Models_2.3=
+                                c(all_pre_reli_m2.3,
+                                  all_post_reli_m2.3,
+                                  pre1.2_pre_reli_m2.3,
+                                  post1.2_post_reli_m2.3,
+                                  both_reli_m2.3))
+
+
+# Show the Comparisons for Correlations, MSE, and R-Squared
+every_cor_combo
+every_MSE_combo
+every_Rsq_combo
+every_reli_combo
+```
+
+# Correlation Matrix (Reliability)
+```{r}
+# All Pre-Measures
+all_pre_df <- data.frame(Model_1=all_pre_AIage_m1, 
+                         Model_2=all_pre_AIage_m2, 
+                         Model_3=all_pre_AIage_m3)
+all_pre_cor_mx <- cor(all_pre_df, method="pearson")
+
+# All Post-Measures
+all_post_df <- data.frame(Model_1=all_post_AIage_m1,
+                          Model_2=all_post_AIage_m2,
+                          Model_3=all_post_AIage_m3)
+all_post_cor_mx <- cor(all_post_df, method="pearson")
+
+# Pre1 & Pre2
+pre1.2_pre_df <- data.frame(Model_1=pre1.2_pre_AIage_m1,
+                            Model_2=pre1.2_pre_AIage_m2, 
+                            Model_3=pre1.2_pre_AIage_m3)
+pre1.2_pre_cor_mx <- cor(pre1.2_pre_df, method="pearson")
+
+
+# Post1 & Post2
+post1.2_post_df <- data.frame(Model_1=post1.2_post_AIage_m1,
+                              Model_2=post1.2_post_AIage_m2,
+                              Model_3=post1.2_post_AIage_m3)
+post1.2_post_cor_mx <- cor(post1.2_post_df, method="pearson")
+
+
+# Both Pre/Post-Measures (All Data)
+both_df <- data.frame(Model_1=d$ai_model_1, 
+                      Model_2=d$ai_model_2, 
+                      Model_3=d$ai_model_3)
+both_cor_mx <- cor(both_df, method="pearson")
+
+# Show All Correlation Matrices
+all_pre_cor_mx
+all_post_cor_mx
+pre1.2_pre_cor_mx
+post1.2_post_cor_mx
+both_cor_mx
+```

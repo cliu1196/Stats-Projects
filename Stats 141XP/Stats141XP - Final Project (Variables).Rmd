@@ -1,0 +1,200 @@
+---
+title: "Stats141XP - Final Project (All)"
+author: "Charles Liu (304804942)"
+date: "4/30/2021"
+output:
+  html_document:
+    df_print: paged
+---
+
+# Loading Necessary Packages
+```{r, warning=FALSE, message=FALSE}
+library(readr)
+library(ggplot2)
+library(tidyverse)
+library(corrplot)
+library(gplots)
+library(ggpubr)
+library(car)
+```
+
+
+# Loading Necessary Data
+```{r, warning=FALSE, message=FALSE}
+setwd(getwd())
+d <- read_csv("Code_Sheet_Age_Project_Apr_26.csv")
+```
+
+
+# Preliminary Analysis
+```{r}
+# Check for any NA's
+anyNA(d) # No NA's
+
+# Find which columns have NA's
+colnames(d)[colSums(is.na(d)) > 0] # No NA's
+summary(d)
+glimpse(d)
+
+# Edit `Upper bleph (0 = null, 1 = right, 2 = left, 3 = bilateral)` into character column
+d$`Upper bleph (0 = null, 1 = right, 2 = left, 3 = bilateral)` <- as.character(d$`Upper bleph (0 = null, 1 = right, 2 = left, 3 = bilateral)`)
+
+# Names of Numeric columns
+d_num <- d %>% 
+  select_if(is.numeric)
+colnames(d_num)
+d_num
+
+# Names of Character columns
+d_char <- d %>% 
+  select_if(is.character)
+colnames(d_char)
+d_char
+```
+
+
+# Start Analyzing the Data (Numeric Columns)
+```{r}
+# Analyzing the Numeric columns
+corr_d.1 <- cor(d_num[,1:5])
+corrplot(corr_d.1, method = "circle") # smaller parts
+
+corr_d.2 <- cor(d_num[,7:10])
+corrplot(corr_d.2, method = "circle") # smaller parts
+
+corr_d.3 <- cor(d_num[,11:14])
+corrplot(corr_d.3, method = "circle") # smaller parts
+
+corr_d.4 <- cor(d_num)
+corrplot(corr_d.4, method = "circle") # combined
+```
+
+
+# Setting up the data for the 3 AI Models
+```{r}
+diff_m1 <- d$age_actual - d$ai_model_1
+diff_m2 <- d$age_actual - d$ai_model_2
+diff_m3 <- d$age_actual - d$ai_model_3
+```
+
+## Histogram & Boxplots
+```{r}
+par(mfrow=c(2,2))
+hist(diff_m1,breaks = 30, main="Model 1 Differences")
+hist(diff_m2,breaks = 30, main="Model 2 Differences")
+hist(diff_m3,breaks = 30, main="Model 3 Differences")
+
+par(mfrow=c(1,1))
+boxplot(diff_m1, diff_m2, diff_m3,
+        main="Boxplot for All AI Model Differences", xlab="Model Types", 
+        names=c("Model 1", "Model 2", "Model 3"))
+# performs best -> Model 2 -> has some Outliers to consider and probably remove
+# performs worst -> Model 1
+# performs middle -> Model 3 -> has not Outliers, so might be better than M2
+
+# We ignored Model 1 since it clearly performs the worst. Further analysis is unnecessary. M3 has both smaller Mean and Median than M2. We shall further determine which of the two models perform the best in terms of accuracy and reliability.
+summary(diff_m2)
+summary(diff_m3)
+
+# Means
+mean_m1 <- mean(diff_m1)
+mean_m2 <- mean(diff_m2)
+mean_m3 <- mean(diff_m3)
+
+data.frame(Accuracy_Mean=c(mean_m1, mean_m2, mean_m3),
+           AI_Models=c("Model 1", "Model 2", "Model 3")) 
+# needs to be closer to zero for better accuracy since they are all difference
+
+
+# Median
+med_m1 <- median(diff_m1)
+med_m2 <- median(diff_m2)
+med_m3 <- median(diff_m3)
+
+data.frame(Accuracy_Median=c(med_m1, med_m2, med_m3),
+           AI_Models=c("Model 1", "Model 2", "Model 3"))
+# needs to be closer to zero for better accuracy since they are all difference
+```
+
+**Comments:** Graphically, it looks like Model 2 performs better than Model 3 in terms of *Accuracy*. Numerically, Model 3 performs better than Model 2. Further analysis is needed for the AI Models.
+
+
+## Plot Means for Categorical Variables [Model 2]
+
+**NOTE:** When it comes to the Categorical variables for "f-number" all the way till "dimensions" (along with "Upper Bleph"), they are all "Null", but the rest of the information might be useful. (columns 11,21-27) (observations 82 & 113 are all Null for these columns)
+
+```{r, warning=FALSE, message=FALSE}
+par(mfrow=c(2,2))
+plotmeans(diff_m2[-c(53,82,113)] ~ d$model[-c(53,82,113)], 
+          data = d, xlab="Camera Model", 
+          ylab="Age Difference (M2)", main="Mean Significance for Camera Model") # need to remove iPhone 6 and Null -> I removed iPhone 6 (since it was n=1 and it is observation 53) but might be important -> further analysis needed
+
+plotmeans(diff_m2[-c(82,113)] ~ d$make[-c(82,113)], 
+          data = d, xlab="Camera Type", 
+          ylab="Age Difference (M2)", main="Mean Significance for Camera Type") # not as relevant since mostly Canon anyways but might be interested in
+
+plotmeans(diff_m2[-c(82,113)] ~ d$sensitivity[-c(82,113)], 
+          data = d, xlab="Sensitivity Rating", 
+          ylab="Age Difference (M2)", main="Mean Significance for Sensitivity Rating")
+
+plotmeans(diff_m2[-c(82,113)] ~ d$`exposure time`[-c(82,113)], 
+          data = d, xlab="Exposure Time", 
+          ylab="Age Difference (M2)", main="Mean Significance for Exposure Time") # need to edit to either remove the n = 1 observations or keep them -> further analysis is needed
+
+par(mfrow=c(2,2))
+plotmeans(diff_m2[-c(82,113)] ~ d$`focal length`[-c(82,113)], 
+          data = d, xlab="Focal Length", 
+          ylab="Age Difference (M2)", main="Mean Significance for Focal Length") # need to edit to either remove the n = 1 observations or keep them -> further analysis is needed
+
+plotmeans(diff_m2[-c(82,113)] ~ d$`f-number`[-c(82,113)], 
+          data = d, xlab="F-Number", 
+          ylab="Age Difference (M2)", main="Mean Significance for F-Number") # n = 1 is really dragging down the Plot Means -> further analysis is needed
+
+plotmeans(diff_m2[-c(82,113)] ~ d$dimensions[-c(82,113)], 
+          data = d, xlab="Dimensions of Photo", main="Mean Significance for Dimensions") # need to edit to either remove the n = 1 observations or keep them -> further analysis is needed
+
+plotmeans(diff_m2[-c(82,113)] ~ d$`Upper bleph (0 = null, 1 = right, 2 = left, 3 = bilateral)`[-c(82,113)], 
+          data = d, xlab="Upper Bleph Treatment", 
+          ylab="Age Difference (M2)", main="Mean Significance for Upper Bleph")
+```
+
+
+## Plot Means for Categorical Variables [Model 3]
+
+**NOTE:** When it comes to the Categorical variables for "f-number" all the way till "dimensions" (along with "Upper Bleph"), they are all "Null", but the rest of the information might be useful. (columns 11,21-27) (observations 82 & 113 are all Null for these columns)
+
+```{r, warning=FALSE, message=FALSE}
+par(mfrow=c(2,2))
+plotmeans(diff_m3[-c(53,82,113)] ~ d$model[-c(53,82,113)], 
+          data = d, xlab="Camera Model", 
+          ylab="Age Difference (M3)", main="Mean Significance for Camera Model") # need to remove iPhone 6 and Null -> I removed iPhone 6 (since it was n=1 and it is observation 53) but might be important -> further analysis needed
+
+plotmeans(diff_m3[-c(82,113)] ~ d$make[-c(82,113)], 
+          data = d, xlab="Camera Type", 
+          ylab="Age Difference (M3)", main="Mean Significance for Camera Type") # not as relevant since mostly Canon anyways but might be interested in
+
+plotmeans(diff_m3[-c(82,113)] ~ d$sensitivity[-c(82,113)], 
+          data = d, xlab="Sensitivity Rating", 
+          ylab="Age Difference (M3)", main="Mean Significance for Sensitivity Rating")
+
+plotmeans(diff_m3[-c(82,113)] ~ d$`exposure time`[-c(82,113)], 
+          data = d, xlab="Exposure Time", 
+          ylab="Age Difference (M3)", main="Mean Significance for Exposure Time") # need to edit to either remove the n = 1 observations or keep them -> further analysis is needed
+
+par(mfrow=c(2,2))
+plotmeans(diff_m3[-c(82,113)] ~ d$`focal length`[-c(82,113)], 
+          data = d, xlab="Focal Length", 
+          ylab="Age Difference (M3)", main="Mean Significance for Focal Length") # need to edit to either remove the n = 1 observations or keep them -> further analysis is needed
+
+plotmeans(diff_m3[-c(82,113)] ~ d$`f-number`[-c(82,113)], 
+          data = d, xlab="F-Number", 
+          ylab="Age Difference (M3)", main="Mean Significance for F-Number") # n = 1 is really dragging down the Plot Means -> further analysis is needed
+
+plotmeans(diff_m3[-c(82,113)] ~ d$dimensions[-c(82,113)], 
+          data = d, xlab="Dimensions of Photo", 
+          ylab="Age Difference (M3)", main="Mean Significance for Dimensions") # need to edit to either remove the n = 1 observations or keep them -> further analysis is needed
+
+plotmeans(diff_m3[-c(82,113)] ~ d$`Upper bleph (0 = null, 1 = right, 2 = left, 3 = bilateral)`[-c(82,113)], 
+          data = d, xlab="Upper Bleph Treatment", 
+          ylab="Age Difference (M3)", main="Mean Significance for Upper Bleph")
+```

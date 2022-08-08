@@ -1,0 +1,162 @@
+---
+title: "Stats141XP - Final Project (Cleaned)"
+author: "Charles Liu (304804942)"
+date: "4/30/2021"
+output:
+  html_document:
+    df_print: paged
+---
+
+# Loading Necessary Packages
+```{r, warning=FALSE, message=FALSE}
+library(readr)
+library(ggplot2)
+library(tidyverse)
+library(corrplot)
+library(gplots)
+library(ggpubr)
+library(car)
+library(psych)
+```
+
+# Loading Necessary Data
+```{r, warning=FALSE, message=FALSE}
+setwd(getwd())
+d <- read_csv("Code_Sheet_Age_Project_Apr_26.csv")
+```
+
+# Set Up Work for Correlation
+```{r}
+# Set up conditions
+all_pre_m1 <- sort(which(d$pre_or_post_operation %in% c("pre", "pre_2",
+                                                        "pre_3")))
+all_pre_m2 <- sort(which(d$pre_or_post_operation %in% c("pre", "pre_2",
+                                                        "pre_3")))
+all_pre_m3 <- sort(which(d$pre_or_post_operation %in% c("pre", "pre_2",
+                                                        "pre_3")))
+all_post_m1 <- sort(which(d$pre_or_post_operation %in% c("post", "post_2",
+                                                        "post_3")))
+all_post_m2 <- sort(which(d$pre_or_post_operation %in% c("post", "post_2",
+                                                        "post_3")))
+all_post_m3 <- sort(which(d$pre_or_post_operation %in% c("post", "post_2",
+                                                        "post_3")))
+pre1.2_pre_m1 <- sort(which(d$pre_or_post_operation %in% c("pre", "pre_2")))
+pre1.2_pre_m2 <- sort(which(d$pre_or_post_operation %in% c("pre", "pre_2")))
+pre1.2_pre_m3 <- sort(which(d$pre_or_post_operation %in% c("pre", "pre_2")))
+post1.2_post_m1 <- sort(which(d$pre_or_post_operation %in% c("post", "post_2")))
+post1.2_post_m2 <- sort(which(d$pre_or_post_operation %in% c("post", "post_2")))
+post1.2_post_m3 <- sort(which(d$pre_or_post_operation %in% c("post", "post_2")))
+
+# Apply the conditions
+all_pre_actual_m1 <- d$age_actual[all_pre_m1]
+all_pre_AIage_m1 <- d$ai_model_1[all_pre_m1]
+all_pre_actual_m2 <- d$age_actual[all_pre_m2]
+all_pre_AIage_m2 <- d$ai_model_2[all_pre_m2]
+all_pre_actual_m3 <- d$age_actual[all_pre_m3]
+all_pre_AIage_m3 <- d$ai_model_3[all_pre_m3]
+all_post_actual_m1 <- d$age_actual[all_post_m1]
+all_post_AIage_m1 <- d$ai_model_1[all_post_m1]
+all_post_actual_m2 <- d$age_actual[all_post_m2]
+all_post_AIage_m2 <- d$ai_model_2[all_post_m2]
+all_post_actual_m3 <- d$age_actual[all_post_m3]
+all_post_AIage_m3 <- d$ai_model_3[all_post_m3]
+pre1.2_pre_actual_m1 <- d$age_actual[pre1.2_pre_m1]
+pre1.2_pre_AIage_m1 <- d$ai_model_1[pre1.2_pre_m1]
+pre1.2_pre_actual_m2 <- d$age_actual[pre1.2_pre_m2]
+pre1.2_pre_AIage_m2 <- d$ai_model_2[pre1.2_pre_m2]
+pre1.2_pre_actual_m3 <- d$age_actual[pre1.2_pre_m3]
+pre1.2_pre_AIage_m3 <- d$ai_model_3[pre1.2_pre_m3]
+post1.2_post_actual_m1 <- d$age_actual[post1.2_post_m1]
+post1.2_post_AIage_m1 <- d$ai_model_1[post1.2_post_m1]
+post1.2_post_actual_m2 <- d$age_actual[post1.2_post_m2]
+post1.2_post_AIage_m2 <- d$ai_model_2[post1.2_post_m2]
+post1.2_post_actual_m3 <- d$age_actual[post1.2_post_m3]
+post1.2_post_AIage_m3 <- d$ai_model_3[post1.2_post_m3]
+
+# Set up the Dataframes
+all_pre_df <- data.frame(Actual=all_pre_actual_m1,
+                         Model_1=all_pre_AIage_m1, 
+                         Model_2=all_pre_AIage_m2, 
+                         Model_3=all_pre_AIage_m3)
+all_post_df <- data.frame(Actual=all_post_actual_m1,
+                          Model_1=all_post_AIage_m1,
+                          Model_2=all_post_AIage_m2,
+                          Model_3=all_post_AIage_m3)
+pre1.2_pre_df <- data.frame(Actual=pre1.2_pre_actual_m1,
+                            Model_1=pre1.2_pre_AIage_m1,
+                            Model_2=pre1.2_pre_AIage_m2, 
+                            Model_3=pre1.2_pre_AIage_m3)
+post1.2_post_df <- data.frame(Actual=post1.2_post_actual_m1,
+                              Model_1=post1.2_post_AIage_m1,
+                              Model_2=post1.2_post_AIage_m2,
+                              Model_3=post1.2_post_AIage_m3)
+both_df <- data.frame(Actual=d$age_actual,
+                      Model_1=d$ai_model_1, 
+                      Model_2=d$ai_model_2, 
+                      Model_3=d$ai_model_3)
+```
+
+
+# Correlation Matrix (Reliability)
+**Note:** All the Actuals for Each AI Models have the same Actual Ages.
+```{r}
+# All Pre-Measures
+lowerCor(all_pre_df, method="pearson")
+
+# All Post-Measures
+lowerCor(all_post_df, method="pearson")
+
+# Pre1 & Pre2
+lowerCor(pre1.2_pre_df, method="pearson")
+
+# Post1 & Post2
+lowerCor(post1.2_post_df, method="pearson")
+
+# Both Pre/Post-Measures (All Data)
+lowerCor(both_df, method="pearson")
+```
+
+# Check Statistically Significant & Reproduciblity
+1) P-value: how statistically significant they are (has to be lower than 0.05)
+2) CI (Confidence Interval): This means that calculates 95% confidence intervals around the correlation value R. This means that if we repeated the experiment many times with datasets drawn from the same population the calculated confident intervals would contain the true value at 95% of the time these confidence intervals.
+```{r}
+# All Pre-Measures
+corr.test(all_pre_df, use="pairwise.complete.obs")$ci[1:3,]
+
+# All Post-Measures
+corr.test(all_post_df, use="pairwise.complete.obs")$ci[1:3,]
+
+# Pre1 & Pre2
+corr.test(pre1.2_pre_df, use="pairwise.complete.obs")$ci[1:3,]
+
+# Post1 & Post2
+corr.test(post1.2_post_df, use="pairwise.complete.obs")$ci[1:3,]
+
+# Both Pre/Post-Measures (All Data)
+corr.test(both_df, use="pairwise.complete.obs")$ci[1:3,]
+```
+
+# Checking Reliability & Consistency
+```{r, warning=FALSE, message=FALSE}
+# Note: $alpha == splitHalf(...)[8] == "Average split half reliability"
+
+# All Pre-Measures
+alpha(all_pre_df)[3] # (? > 0.80 -> reliable)
+splitHalf(all_pre_df)[8] # shows consistency (? > 0.80 -> consistent)
+
+# All Post-Measures
+alpha(all_post_df)[3] # (? > 0.80 -> reliable)
+splitHalf(all_post_df)[8] # shows consistency (? > 0.80 -> consistent)
+
+# Pre1 & Pre2
+alpha(pre1.2_pre_df)[3] # (? > 0.80 -> reliable)
+splitHalf(pre1.2_pre_df)[8] # shows consistency (? > 0.80 -> consistent)
+
+# Post1 & Post2
+alpha(post1.2_post_df)[3] # (? > 0.80 -> reliable)
+splitHalf(post1.2_post_df)[8] # shows consistency (? > 0.80 -> consistent)
+
+# Both Pre/Post-Measures (All Data)
+alpha(both_df)[3] # (? > 0.80 -> reliable)
+splitHalf(both_df)[8] # shows consistency (? > 0.80 -> consistent)
+```

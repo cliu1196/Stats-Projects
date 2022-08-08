@@ -1,0 +1,104 @@
+---
+title: "Stats 141 Project"
+author: "Amanda Xu"
+date: "5/10/2021"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(data.table)
+library(readxl)
+setwd(getwd())
+age_data <- read_csv("Code_Sheet_Age_Project_Apr_26.csv")
+
+# remove rows not taken with Canon camera
+canon_data<- age_data[which(age_data$make=="'Canon'"),]
+canon_pre<-canon_data[canon_data$pre_or_post_operation %like% "pre", ]
+```
+
+Difference in Models Predicted Age vs Actual Age (pre-operation)
+Histogram
+```{r}
+age_pre<-age_data[age_data$pre_or_post_operation %like% "pre", ]
+
+# mse_model1_pre<- (1/169) * sum((age_pre$age_actual-age_pre$ai_model_1)^2)
+# mse_model2_pre<- (1/169) * sum((age_pre$age_actual-age_pre$ai_model_2)^2)
+# mse_model3_pre<- (1/169) * sum((age_pre$age_actual-age_pre$ai_model_3)^2)
+
+
+
+par(mfrow=c(2,2))
+hist(abs(age_pre$age_actual-age_pre$ai_model_1),breaks=16)
+hist(abs(age_pre$age_actual-age_pre$ai_model_2),breaks=16)
+hist(abs(age_pre$age_actual-age_pre$ai_model_3),breaks=16)
+
+```
+
+
+
+Boxplot
+```{r}
+
+boxplot(abs(age_pre$age_actual-age_pre$ai_model_1),abs(age_pre$age_actual-age_pre$ai_model_2),abs(age_pre$age_actual-age_pre$ai_model_3))
+title(main="Boxplot of Age Errors",
+   xlab="Model", ylab="absolute value of actual minus predicted age")
+
+# par(mfrow=c(1,3))
+# boxplot(canon_pre$age_actual-canon_pre$ai_model_1)
+# boxplot(canon_pre$age_actual-canon_pre$ai_model_2)
+# boxplot(canon_pre$age_actual-canon_pre$ai_model_3)
+```
+Summary Statistics
+```{r}
+summary(abs(age_pre$age_actual-age_pre$ai_model_1))
+summary(abs(age_pre$age_actual-age_pre$ai_model_2))
+summary(abs(age_pre$age_actual-age_pre$ai_model_3))
+
+```
+
+Scatterplots
+```{r}
+par(mfrow=c(1,3))
+plot(age_data$ai_model_1,age_data$age_actual)
+
+plot(age_data$ai_model_2,age_data$age_actual)
+
+plot(age_data$ai_model_3,age_data$age_actual)
+```
+
+Influence Plots
+```{r}
+library(car)
+
+#par(mfrow=c(1,3))
+influencePlot(lm(age_data$ai_model_1~age_data$age_actual))
+influencePlot(lm(age_data$ai_model_2~age_data$age_actual))
+influencePlot(lm(age_data$ai_model_3~age_data$age_actual))
+
+
+m_test <- lm(age_data$ai_model_1~.,data=age_data)
+
+
+```
+
+
+MSE of models 1,2,3
+```{r}
+m1<- lm(age_data$ai_model_1~age_data$age_actual)
+mean(m1$residuals^2)
+summary(m1)
+m2<- lm(age_data$ai_model_2~age_data$age_actual)
+mean(m2$residuals^2)
+m3<- lm(age_data$ai_model_3~age_data$age_actual)
+mean(m3$residuals^2)
+
+library(ggplot2)
+mse<- (c(mean(m1$residuals^2),mean(m2$residuals^2),mean(m3$residuals^2)))
+ggplot()+geom_point(aes(x=1:3,y=mse))+geom_line(aes(x=1:3,y=mse),size=1)+
+  scale_x_continuous(breaks = seq(1, 3, by = 1))+
+  xlab("Model number")+ylab("Mean Squared Error")+ggtitle("Mean Squared Error of Models 1,2,3")
+```

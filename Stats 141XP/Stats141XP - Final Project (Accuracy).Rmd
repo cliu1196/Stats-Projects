@@ -1,0 +1,96 @@
+---
+title: "Stats141XP - Final Project (All)"
+author: "Charles Liu (304804942)"
+date: "4/30/2021"
+output:
+  html_document:
+    df_print: paged
+---
+
+# Loading Necessary Packages
+```{r, warning=FALSE, message=FALSE}
+library(readr)
+library(ggplot2)
+library(tidyverse)
+library(corrplot)
+library(gplots)
+library(ggpubr)
+library(car)
+```
+
+
+# Loading Necessary Data
+```{r, warning=FALSE, message=FALSE}
+setwd(getwd())
+d <- read_csv("Code_Sheet_Age_Project_Apr_26.csv")
+```
+
+
+# Setting up the data for the 3 AI Models
+```{r}
+diff_m1 <- d$age_actual - d$ai_model_1
+diff_m2 <- d$age_actual - d$ai_model_2
+diff_m3 <- d$age_actual - d$ai_model_3
+```
+
+## Histogram & Boxplots
+```{r}
+par(mfrow=c(2,2))
+hist(diff_m1,breaks = 30, main="Model 1 Differences")
+hist(diff_m2,breaks = 30, main="Model 2 Differences")
+hist(diff_m3,breaks = 30, main="Model 3 Differences")
+
+par(mfrow=c(1,1))
+boxplot(diff_m1, diff_m2, diff_m3,
+        main="Boxplot for All AI Model Differences", xlab="Model Types", 
+        names=c("Model 1", "Model 2", "Model 3"))
+# performs best -> Model 2 -> has some Outliers to consider and probably remove
+# performs worst -> Model 1
+# performs middle -> Model 3 -> has not Outliers, so might be better than M2
+
+# We ignored Model 1 since it clearly performs the worst. Further analysis is unnecessary. M3 has both smaller Mean and Median than M2. We shall further determine which of the two models perform the best in terms of accuracy and reliability.
+summary(diff_m2)
+summary(diff_m3)
+# needs to be closer to zero for better accuracy since they are all difference
+```
+
+**Comments:** Graphically, it looks like Model 2 performs better than Model 3 in terms of *Accuracy*. Numerically, Model 3 performs better than Model 2. Further analysis is needed for the AI Models.
+
+
+
+# Accuracy & Reliability for All AI Models (both "pre" & "post")
+## Set up the data
+```{r}
+# Differences in Age between Actual Age and AI Model Predicted Age
+diff_m1 <- d$age_actual - d$ai_model_1
+diff_m2 <- d$age_actual - d$ai_model_2
+diff_m3 <- d$age_actual - d$ai_model_3
+
+# Accuracy (using R-Squared)
+all_r_m1 <- summary(lm(d$ai_model_1 ~ d$age_actual))$r.squared
+all_r_m2 <- summary(lm(d$ai_model_2 ~ d$age_actual))$r.squared
+all_r_m3 <- summary(lm(d$ai_model_3 ~ d$age_actual))$r.squared
+
+# Accuracy (using MSE)
+all_MSE_m1 <- mean((lm(d$age_actual ~ d$ai_model_1)$residuals)^2)
+all_MSE_m2 <- mean((lm(d$age_actual ~ d$ai_model_2)$residuals)^2)
+all_MSE_m3 <- mean((lm(d$age_actual ~ d$ai_model_3)$residuals)^2)
+
+# Reliability (using correlation)
+all_cor_m1 <- cor(d$age_actual, d$ai_model_1)
+all_cor_m2 <- cor(d$age_actual, d$ai_model_2)
+all_cor_m3 <- cor(d$age_actual, d$ai_model_3)
+
+# Combine all above for comparisons
+acc_reli_comparison_all_models <- 
+  data.frame(`Model Type`=c("AI Model 1", "AI Model 2", "AI Model 3"),
+             `Accuracy (using R-Squared)`=c(all_r_m1, all_r_m2, all_r_m3),
+             `Accuracy (using MSE)`=c(all_MSE_m1,all_MSE_m2, all_MSE_m3),
+             `Reliability (using correlation)`=c(all_cor_m1, all_cor_m2, 
+                                                 all_cor_m3))
+```
+
+## Show the comparisons for each Models (Numerical)
+```{r}
+acc_reli_comparison_all_models
+```

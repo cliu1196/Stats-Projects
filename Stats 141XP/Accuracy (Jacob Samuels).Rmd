@@ -1,0 +1,221 @@
+---
+title: "Accuracy Check"
+author: "Jacob Samuels"
+date: "5/19/2021"
+output: pdf_document
+---
+
+```{r, echo=TRUE, results='hide', message=FALSE}
+library(readr)
+library(dplyr)
+library(tidyverse)
+library(ggplot2)
+setwd(getwd())
+d <- read_csv("Code_Sheet_Age_Project_Apr_26.csv")
+```
+
+```{r}
+model1 <- lm(data = d, age_actual ~ ai_model_1)
+model2 <- lm(data = d, age_actual ~ ai_model_2)
+model3 <- lm(data = d, age_actual ~ ai_model_3)
+
+SE1 <- (model1$residuals)^2
+SE2 <- (model2$residuals)^2
+SE3 <- (model3$residuals)^2
+
+MSE1 <- mean(SE1)
+MSE2 <- mean(SE2)
+MSE3 <- mean(SE3)
+
+alls <- c(MSE1, MSE2, MSE3)
+```
+
+```{r}
+pre <- d %>% filter(pre_or_post_operation == "pre")
+
+pre1 <- lm(data = pre, age_actual ~ ai_model_1)
+pre2 <- lm(data = pre, age_actual ~ ai_model_2)
+pre3 <- lm(data = pre, age_actual ~ ai_model_3)
+
+preMSE1 <- mean((pre1$residuals)^2)
+preMSE2 <- mean((pre2$residuals)^2)
+preMSE3 <- mean((pre3$residuals)^2)
+
+pres <- c(preMSE1, preMSE2, preMSE3)
+```
+
+
+```{r}
+pre2 <- d %>% filter(pre_or_post_operation == "pre_2")
+
+pre_1 <- lm(data = pre2, age_actual ~ ai_model_1)
+pre_2 <- lm(data = pre2, age_actual ~ ai_model_2)
+pre_3 <- lm(data = pre2, age_actual ~ ai_model_3)
+
+pre_MSE1 <- mean((pre_1$residuals)^2)
+pre_MSE2 <- mean((pre_2$residuals)^2)
+pre_MSE3 <- mean((pre_3$residuals)^2)
+
+pre_s <- c(pre_MSE1, pre_MSE2, pre_MSE3)
+```
+
+
+```{r}
+post <- d %>% filter(pre_or_post_operation == "post")
+
+post1 <- lm(data = post, age_actual ~ ai_model_1)
+post2 <- lm(data = post, age_actual ~ ai_model_2)
+post3 <- lm(data = post, age_actual ~ ai_model_3)
+
+postMSE1 <- mean((post1$residuals)^2)
+postMSE2 <- mean((post2$residuals)^2)
+postMSE3 <- mean((post3$residuals)^2)
+
+posts <- c(postMSE1, postMSE2, postMSE3)
+```
+
+
+```{r}
+MSE_data <- data.frame(model = c("ai_model_1", "ai_model_2", "ai_model_3"), 
+                       alls, pres, pre_s, posts)
+
+
+ggplot(data = MSE_data, aes(model, alls, color = "All Data")) +
+  geom_point(size = 5) +
+  geom_point(aes(model, pres, color = "Pre"), size = 5) +
+  geom_point(aes(model, pre_s, color = "Pre_2"), size = 5) +
+  geom_point(aes(model, posts, color = "Post"), size = 5) +
+  xlab("Model") + 
+  ylab("Mean Squared Error (MSE)") + 
+  ggtitle("MSE by Model and Time of Picture (Lower MSE is Better)") +
+  guides(col = guide_legend("Time of Picture\nRelative to Operation")) +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+
+```{r}
+SEs <- data.frame(ai_model_1 = SE1, ai_model_2 = SE2)
+LONG <- pivot_longer(SEs, c(ai_model_1, ai_model_2), names_to = "model")
+ai1_vs_ai2 <- aov(data = LONG, value ~ model)
+
+SEs <- data.frame(ai_model_2 = SE2, ai_model_3 = SE3)
+LONG <- pivot_longer(SEs, c(ai_model_2, ai_model_3), names_to = "model")
+ai2_vs_ai3 <- aov(data = LONG, value ~ model)
+
+SEs <- data.frame(ai_model_1 = SE1, ai_model_3 = SE3)
+LONG <- pivot_longer(SEs, c(ai_model_1, ai_model_3), names_to = "model")
+ai1_vs_ai3 <- aov(data = LONG, value ~ model)
+
+SEs <- data.frame(ai_model_1 = SE1, ai_model_2 = SE2, ai_model_3 = SE3)
+LONG <- pivot_longer(SEs, c(ai_model_1, ai_model_2, ai_model_3), names_to = "model")
+ai1_vs_ai2_vs_ai3 <- aov(data = LONG, value ~ model)
+
+summary(ai1_vs_ai2)
+summary(ai2_vs_ai3)
+summary(ai1_vs_ai3)
+summary(ai1_vs_ai2_vs_ai3)
+```
+
+
+
+## new stuff
+```{r}
+age_dif <- post$age_actual - pre$age_actual
+ai1_dif <- post$ai_model_1 - pre$ai_model_1
+ai2_dif <- post$ai_model_2 - pre$ai_model_2
+ai3_dif <- post$ai_model_3 - pre$ai_model_3
+
+differences <- data.frame(age_dif, ai1_dif, ai2_dif, ai3_dif)
+
+dif1 <- lm(data = differences, age_dif ~ ai1_dif)
+dif2 <- lm(data = differences, age_dif ~ ai2_dif)
+dif3 <- lm(data = differences, age_dif ~ ai3_dif)
+
+difSE1 <- (dif1$residuals)^2
+difSE2 <- (dif2$residuals)^2
+difSE3 <- (dif3$residuals)^2
+
+difMSE1 <- mean(difSE1)
+difMSE2 <- mean(difSE2)
+difMSE3 <- mean(difSE3)
+
+difs <- c(difMSE1, difMSE2, difMSE3)
+difs
+
+mean(age_dif) #age dif
+mean(ai1_dif)
+mean(ai2_dif)
+mean(ai3_dif)
+
+mean(ai1_dif - age_dif) #standardized age dif
+mean(ai2_dif - age_dif)
+mean(ai3_dif - age_dif)
+```
+
+```{r}
+SEs <- data.frame(ai_model_1 = difSE1, ai_model_2 = difSE2)
+LONG <- pivot_longer(SEs, c(ai_model_1, ai_model_2), names_to = "model")
+ai1_vs_ai2 <- aov(data = LONG, value ~ model)
+
+SEs <- data.frame(ai_model_2 = difSE2, ai_model_3 = difSE3)
+LONG <- pivot_longer(SEs, c(ai_model_2, ai_model_3), names_to = "model")
+ai2_vs_ai3 <- aov(data = LONG, value ~ model)
+
+SEs <- data.frame(ai_model_1 = difSE1, ai_model_3 = difSE3)
+LONG <- pivot_longer(SEs, c(ai_model_1, ai_model_3), names_to = "model")
+ai1_vs_ai3 <- aov(data = LONG, value ~ model)
+
+SEs <- data.frame(ai_model_1 = difSE1, ai_model_2 = difSE2, ai_model_3 = difSE3)
+LONG <- pivot_longer(SEs, c(ai_model_1, ai_model_2, ai_model_3), names_to = "model")
+ai1_vs_ai2_vs_ai3 <- aov(data = LONG, value ~ model)
+
+summary(ai1_vs_ai2)
+summary(ai2_vs_ai3)
+summary(ai1_vs_ai3)
+summary(ai1_vs_ai2_vs_ai3)
+```
+
+
+```{r}
+SEs <- data.frame(ai_model_1 = ai1_dif - age_dif, ai_model_2 = ai2_dif - age_dif)
+LONG <- pivot_longer(SEs, c(ai_model_1, ai_model_2), names_to = "model")
+ai1_vs_ai2 <- aov(data = LONG, value ~ model)
+
+SEs <- data.frame(ai_model_2 = ai2_dif - age_dif, ai_model_3 = ai3_dif - age_dif)
+LONG <- pivot_longer(SEs, c(ai_model_2, ai_model_3), names_to = "model")
+ai2_vs_ai3 <- aov(data = LONG, value ~ model)
+
+SEs <- data.frame(ai_model_1 = ai1_dif - age_dif, ai_model_3 = ai3_dif - age_dif)
+LONG <- pivot_longer(SEs, c(ai_model_1, ai_model_3), names_to = "model")
+ai1_vs_ai3 <- aov(data = LONG, value ~ model)
+
+SEs <- data.frame(ai_model_1 = ai1_dif - age_dif, ai_model_2 = ai2_dif - age_dif, 
+                  ai_model_3 = ai3_dif - age_dif)
+LONG <- pivot_longer(SEs, c(ai_model_1, ai_model_2, ai_model_3), names_to = "model")
+ai1_vs_ai2_vs_ai3 <- aov(data = LONG, value ~ model)
+
+summary(ai1_vs_ai2)
+summary(ai2_vs_ai3)
+summary(ai1_vs_ai3)
+summary(ai1_vs_ai2_vs_ai3)
+```
+
+
+```{r}
+SEs <- data.frame(age_actual = age_dif, ai_model_1 = ai1_dif)
+LONG <- pivot_longer(SEs, c(age_actual, ai_model_1), names_to = "model")
+actual_vs_ai1 <- aov(data = LONG, value ~ model)
+
+SEs <- data.frame(age_actual = age_dif, ai_model_2 = ai2_dif)
+LONG <- pivot_longer(SEs, c(age_actual, ai_model_2), names_to = "model")
+actual_vs_ai2 <- aov(data = LONG, value ~ model)
+
+SEs <- data.frame(age_actual = age_dif, ai_model_3 = ai3_dif)
+LONG <- pivot_longer(SEs, c(age_actual, ai_model_3), names_to = "model")
+actual_vs_ai3 <- aov(data = LONG, value ~ model)
+
+summary(actual_vs_ai1)
+summary(actual_vs_ai2)
+summary(actual_vs_ai3)
+```
+

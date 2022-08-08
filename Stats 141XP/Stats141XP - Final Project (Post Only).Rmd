@@ -1,0 +1,1334 @@
+---
+title: "Stats141XP - Final Project (Post Only)"
+author: "Charles Liu (304804942)"
+date: "5/19/2021"
+output: html_document
+---
+
+# Loading Necessary Packages
+```{r, warning=FALSE, message=FALSE}
+library(readr)
+library(ggplot2)
+library(tidyverse)
+library(corrplot)
+library(gplots)
+library(ggpubr)
+library(car)
+```
+
+
+# Loading Necessary Data
+```{r, warning=FALSE, message=FALSE}
+setwd(getwd())
+d <- read_csv("Code_Sheet_Age_Project_Apr_26.csv")
+```
+
+
+# Setting up the data for the 3 AI Models
+```{r}
+diff_m1 <- d$age_actual - d$ai_model_1
+diff_m2 <- d$age_actual - d$ai_model_2
+diff_m3 <- d$age_actual - d$ai_model_3
+```
+
+
+
+# Testing Reliability for ALL Combinations of "post-measurements" [AI Model 1]
+
+**NOTE:** The parts are as follows...
+  i) "post" & "post_2" are Parts 1.1 - 6.1
+  ii) "post" & "post_3" are Parts 7.1 - 11.1
+  iii) "post_2" & "post_3" are Parts 12.1 - 16.1
+  iv) Every "post-measurement" are Parts 17.1 - 21.1
+
+## Analysis (Part 1.1)
+```{r}
+## Re-order the dataset
+nrow(d)
+for (i in 1:301) {
+  if(d$patient_name[i] %in% d$patient_name[i+1])
+  {
+    if(d$pre_or_post_operation[i] %in% "post_2" &&
+       d$pre_or_post_operation[i+1] %in% "post")
+    {
+      temp <- d[i,]
+      d[i,] <- d[i+1,]
+      d[i+1,] <- temp
+    }
+  }
+}
+```
+
+## Analysis (Part 2.1)
+```{r, warning=FALSE, message=FALSE}
+age11_m1 <- which(d$pre_or_post_operation %in% "post")
+age2_m1 <- which(d$pre_or_post_operation %in% "post_2")
+age3_m1 <- which(d$pre_or_post_operation %in% "post_3")
+all_post_m1 <- sort(c(age11_m1, age2_m1 ,age3_m1))
+age1_m1 <- age2_m1 - 1
+
+age2_post_m1 <- d$ai_model_1[age2_m1]
+age1_post_m1 <- d$ai_model_1[age1_m1]
+age3_post_m1 <- d$ai_model_1[age3_m1]
+post1.2_diff_m1 <- d$age_actual[age2_m1] - d$age_actual[age1_m1]
+hist(post1.2_diff_m1)
+```
+
+## Analysis (Part 3.1)
+```{r}
+## Compute the coefficient of correlation of two postdicted age for "post" & "post_2" for AI M1
+all_post1.2_index_m1 <- sort(c(age1_m1, age2_m1))
+length(all_post1.2_index_m1)/2
+AIage_post_m1 <- numeric(24)
+AIage_post2_m1 <- numeric(24)
+for (i in 1:24) {
+  temp <- i * 2 -1
+  if(d$age_actual[all_post1.2_index_m1[temp]] > 
+     d$age_actual[all_post1.2_index_m1[temp + 1]])
+  {
+    AIage_post_m1[i] <- d$ai_model_1[all_post1.2_index_m1[temp + 1]]
+    AIage_post2_m1[i] <- d$ai_model_1[all_post1.2_index_m1[temp]]
+  }
+  else{
+    AIage_post_m1[i] <- d$ai_model_1[all_post1.2_index_m1[temp]]
+    AIage_post2_m1[i] <- d$ai_model_1[all_post1.2_index_m1[temp + 1]]
+  }
+}
+```
+
+## Analysis (Part 4.1)
+```{r}
+post1.2_age_mx_m1 <- cbind(post1.2_diff_m1, age2_post_m1 - age1_post_m1)
+post1.2_age_mx_m1 # might be better to look at head(...) and tail(...)
+# Make subgroups for time
+## Over Half Years & Over Full Years
+time1_age_m1 <- c(which(post1.2_diff_m1 > 0.5),
+                    which(post1.2_diff_m1 < -0.5))
+time1_age_m1 <- sort(time1_age_m1)
+
+time2_age_m1 <- which(post1.2_diff_m1 >= -1 & 
+              post1.2_diff_m1 <= 1)
+time2_age_m1 <- sort(time2_age_m1)
+
+time3_age_m1 <- c(which(post1.2_diff_m1 < -1),
+        which(post1.2_diff_m1 > 1))
+time3_age_m1 <- sort(time3_age_m1)
+
+# Correlations
+cor1_m1 <- cor(AIage_post_m1, AIage_post2_m1)
+cor2_m1 <- cor(AIage_post_m1[time1_age_m1], AIage_post2_m1[time1_age_m1])
+cor3_m1 <- cor(AIage_post_m1[time2_age_m1], AIage_post2_m1[time2_age_m1])
+cor4_m1 <- cor(AIage_post_m1[time3_age_m1], AIage_post2_m1[time3_age_m1])
+
+post1.2_cor_mx_m1 <- data.frame(Correlation=c(cor1_m1, cor2_m1, 
+                                             cor3_m1, cor4_m1),
+                        Conditions=c("No Conditions", "Over Half Year", 
+                                     "Over Full Year", "Within 1 Year"))
+post1.2_cor_mx_m1
+```
+
+## Analysis (Part 5.1)
+```{r}
+AIage_m1_m1 <- lm(AIage_post_m1 ~ AIage_post2_m1)
+ip_m1_m1 <- influencePlot(AIage_m1_m1)
+ip_m1_m1
+4/length(AIage_post_m1) # Hat-values limit for Influcence Plot
+# High Leverage Points: 7, 24 (? > 4/n for Hat-values)
+# Outlier Points: 9, 10, 11 (StudRes is either [-2 > ? > +2])
+# Good Leverage Points: 7, 24 (? > 4/n for Hat values & within [-2 > ? > +2])
+# Bad Leverage Points: N/A (? > 4/n for Hat values & outside [-2 > ? > +2])
+```
+
+## Analysis (Part 6.1)
+```{r}
+# Finding the Correlation Cofficients for "post" & "post_2" for AI M1
+post1.2_cor_old_m1 <- cor(age1_post_m1, age2_post_m1)
+
+post1.2_cor_compare_m1 <- data.frame(Correlation=c(post1.2_cor_old_m1),
+                             Type=c("All Points"))
+post1.2_cor_compare_m1 # No Bad Leverage Points
+
+# Run the Linear Regression
+post1.2_all_m1_m1 <- lm(age1_post_m1 ~ age2_post_m1)
+summary(post1.2_all_m1_m1)
+
+post1.2_r_compare_m1 <- data.frame(R_sq=c(summary(post1.2_all_m1_m1)$r.squared),
+                             Type=c("All Points")) 
+post1.2_r_compare_m1 # No Bad Leverage Points
+```
+
+## Analysis (Part 7.1)
+```{r}
+# Set up data for "post" & "post_3" for AI M1
+post1.3_m1 <- age3_m1 - 2
+post1.3_df <- d[sort(c(post1.3_m1, age3_m1)),]
+post1_m1 <- which(post1.3_df$pre_or_post_operation %in% "post")
+post3_m1 <- which(post1.3_df$pre_or_post_operation %in% "post_3")
+
+# Note: Last year's messed up and had c(1,3,5,7,9,11,14,16,18) -> "post", BUT the actual points should be c(1,3,5,7,9,11,13,15,17); Same goes for "post_3" since they put c(2,4,6,8,10,12,13,15,17), BUT the actual points should be c(2,4,6,8,10,12,14,16,18)
+post1_df_m1 <- post1.3_df[post1_m1,]
+post3_df_m1 <- post1.3_df[post3_m1,]
+```
+
+## Analysis (Part 8.1)
+```{r}
+post1.3_diff_m1 <- post3_df_m1$age_actual - post1_df_m1$age_actual
+post1_AIage_m1 <- post1_df_m1$ai_model_1
+post3_AIage_m1 <- post3_df_m1$ai_model_1
+hist(post1.3_diff_m1)
+```
+
+## Analysis (Part 9.1)
+```{r}
+# Make subgroups for time
+## Over Half Years & Over Full Years
+time4_age_m1 <- c(which(post1.3_diff_m1 > 0.5),
+                    which(post1.3_diff_m1 < -0.5))
+time4_age_m1 <- sort(time4_age_m1)
+
+time5_age_m1 <- which(post1.3_diff_m1 >= -1 & 
+              post1.3_diff_m1 <= 1)
+time5_age_m1 <- sort(time5_age_m1)
+
+time6_age_m1 <- c(which(post1.3_diff_m1 < -1),
+        which(post1.3_diff_m1 > 1))
+time6_age_m1 <- sort(time6_age_m1)
+
+# Correlations
+cor5_m1 <- cor(post1_AIage_m1, post3_AIage_m1)
+cor6_m1 <- cor(post1_AIage_m1[time4_age_m1], post3_AIage_m1[time4_age_m1])
+cor7_m1 <- cor(post1_AIage_m1[time5_age_m1], post3_AIage_m1[time5_age_m1])
+cor8_m1 <- cor(post1_AIage_m1[time6_age_m1], post3_AIage_m1[time6_age_m1])
+
+post1.3_cor_mx_m1 <- data.frame(Correlation=c(cor5_m1, cor6_m1, 
+                                             cor7_m1, cor8_m1),
+                        Conditions=c("No Conditions", "Over Half Year", 
+                                     "Over Full Year", "Within 1 Year"))
+post1.3_cor_mx_m1
+```
+
+## Analysis (Part 10.1)
+```{r}
+AIage_m2_m1 <- lm(post1_AIage_m1 ~ post3_AIage_m1)
+ip_m2_m1 <- influencePlot(AIage_m2_m1)
+ip_m2_m1
+4/length(post3_AIage_m1) # Hat-values limit for Influcence Plot
+# High Leverage Points: N/A (? > 4/n for Hat-values)
+# Outlier Points: 5 (StudRes is either [-2 > ? > +2])
+# Good Leverage Points: N/A (? > 4/n for Hat values & within [-2 > ? > +2])
+# Bad Leverage Points: N/A (? > 4/n for Hat values & outside [-2 > ? > +2])
+```
+
+## Analysis (Part 11.1)
+```{r}
+# Finding the Correlation Cofficients for "post" & "post_3" for AI M1
+post1.3_cor_old_m1 <- cor(post1_AIage_m1, post3_AIage_m1)
+
+post1.3_cor_compare_m1 <- data.frame(Correlation=c(post1.3_cor_old_m1),
+                             Type=c("All Points"))
+post1.3_cor_compare_m1 # No Bad Leverage Points
+
+# Run the Linear Regression
+post1.3_all_m1_m1 <- lm(post1_AIage_m1 ~ post3_AIage_m1)
+summary(post1.3_all_m1_m1)
+
+post1.3_r_compare_m1 <- data.frame(R_sq=c(summary(post1.3_all_m1_m1)$r.squared),
+                             Type=c("All Points")) 
+post1.3_r_compare_m1 # No Bad Leverage Points
+```
+
+## Analysis (Part 12.1)
+```{r}
+# Set up data for "post_2" & "post_3" for AI M1
+post2.3_m1 <- age3_m1 - 1
+post2.3_df <- d[sort(c(post2.3_m1, age3_m1)),]
+post2_m1 <- which(post2.3_df$pre_or_post_operation %in% "post_2")
+post3_m1 <- which(post2.3_df$pre_or_post_operation %in% "post_3")
+
+# Note: Last year's messed up and had c(1,3,5,7,10,11,14,16,18) -> "post_2", BUT the actual points should be c(1,3,5,7,9,11,13,15,17); Same goes for "post_3" since they put c(2,4,6,8,10,12,13,15,17), BUT the actual points should be c(2,4,6,8,10,12,14,16,18)
+post2_df_m1 <- post2.3_df[post2_m1,] 
+post3_df_m1 <- post2.3_df[post3_m1,]
+```
+
+## Analysis (Part 13.1)
+```{r}
+post2.3_diff_m1 <- post3_df_m1$age_actual - post2_df_m1$age_actual
+post2_AIage_m1 <- post2_df_m1$ai_model_1
+post3_AIage_m1 <- post3_df_m1$ai_model_1
+hist(post2.3_diff_m1)
+```
+
+## Analysis (Part 14.1)
+```{r}
+# Make subgroups for time
+## Over Half Years & Over Full Years
+time7_age_m1 <- c(which(post2.3_diff_m1 > 0.5),
+                    which(post2.3_diff_m1 < -0.5))
+time7_age_m1 <- sort(time7_age_m1)
+
+time8_age_m1 <- which(post2.3_diff_m1 >= -1 & 
+              post2.3_diff_m1 <= 1)
+time8_age_m1 <- sort(time8_age_m1)
+
+time9_age_m1 <- c(which(post2.3_diff_m1 < -1),
+        which(post2.3_diff_m1 > 1))
+time9_age_m1 <- sort(time9_age_m1)
+
+# Correlations
+cor9_m1 <- cor(post2_AIage_m1, post3_AIage_m1)
+cor10_m1 <- cor(post2_AIage_m1[time7_age_m1], post3_AIage_m1[time7_age_m1])
+cor11_m1 <- cor(post2_AIage_m1[time8_age_m1], post3_AIage_m1[time8_age_m1])
+cor12_m1 <- cor(post2_AIage_m1[time9_age_m1], post3_AIage_m1[time9_age_m1])
+
+post2.3_cor_mx_m1 <- data.frame(Correlation=c(cor9_m1, cor10_m1, 
+                                             cor11_m1, cor12_m1),
+                        Conditions=c("No Conditions", "Over Half Year", 
+                                     "Over Full Year", "Within 1 Year"))
+post2.3_cor_mx_m1 # We have N/A since either one or no points for the time given
+```
+
+## Analysis (Part 15.1)
+```{r}
+AIage_m3_m1 <- lm(post2_AIage_m1 ~ post3_AIage_m1)
+ip_m3_m1 <- influencePlot(AIage_m3_m1)
+ip_m3_m1
+4/length(post2_AIage_m1) # Hat-values limit for Influcence Plot
+# High Leverage Points: N/A (? > 4/n for Hat-values)
+# Outlier Points: N/A (StudRes is either [-2 > ? > +2])
+# Good Leverage Points: N/A (? > 4/n for Hat values & within [-2 > ? > +2])
+# Bad Leverage Points: N/A (? > 4/n for Hat values & outside [-2 > ? > +2])
+```
+
+## Analysis (Part 16.1)
+```{r}
+# Finding the Correlation Cofficients for "post_2" & "post_3" for AI M1
+post2.3_cor_old_m1 <- cor(post2_AIage_m1, post3_AIage_m1)
+
+post2.3_cor_compare_m1 <- data.frame(Correlation=c(post2.3_cor_old_m1),
+                             Type=c("All Points"))
+post2.3_cor_compare_m1 # No Bag Leverage Points
+
+# Run the Linear Regression
+post2.3_all_m1_m1 <- lm(post2_AIage_m1 ~ post3_AIage_m1)
+summary(post2.3_all_m1_m1)
+
+post2.3_r_compare_m1 <- data.frame(R_sq=c(summary(post2.3_all_m1_m1)$r.squared),
+                             Type=c("All Points")) 
+post2.3_r_compare_m1 # No Bad Leverage Points
+```
+
+## Analysis (Part 17.1)
+```{r, warning=FALSE, message=FALSE}
+every_post_m1 <- sort(which(d$pre_or_post_operation %in% c("post", "post_2",
+                                                        "post_3")))
+every_post_diff_m1 <- d$age_actual[every_post_m1] - d$ai_model_1[every_post_m1]
+hist(every_post_diff_m1)
+```
+
+## Analysis (Part 18.1)
+```{r}
+every_post_actual_m1 <- d$age_actual[every_post_m1]
+every_post_AIage_m1 <- d$ai_model_1[every_post_m1]
+```
+
+## Analysis (19.1)
+```{r}
+# Make subgroups for time
+## Over Half Years & Over Full Years
+time10_age_m1 <- c(which(every_post_diff_m1 > 0.5),
+                    which(every_post_diff_m1 < -0.5))
+time10_age_m1 <- sort(time10_age_m1)
+
+time11_age_m1 <- which(every_post_diff_m1 >= -1 & 
+              every_post_diff_m1 <= 1)
+time11_age_m1 <- sort(time11_age_m1)
+
+time12_age_m1 <- c(which(every_post_diff_m1 < -1),
+        which(every_post_diff_m1 > 1))
+time12_age_m1 <- sort(time12_age_m1)
+
+# Correlations
+cor13_m1 <- cor(every_post_AIage_m1, 
+                every_post_actual_m1)
+cor14_m1 <- cor(every_post_AIage_m1[time10_age_m1],
+                every_post_actual_m1[time10_age_m1])
+cor15_m1 <- cor(every_post_AIage_m1[time11_age_m1],
+                every_post_actual_m1[time11_age_m1])
+cor16_m1 <- cor(every_post_AIage_m1[time12_age_m1],
+                every_post_actual_m1[time12_age_m1])
+
+every_post_cor_mx_m1 <- data.frame(Correlation=c(cor13_m1, cor14_m1, 
+                                             cor15_m1, cor16_m1),
+                        Conditions=c("No Conditions", "Over Half Year", 
+                                     "Over Full Year", "Within 1 Year"))
+every_post_cor_mx_m1
+```
+
+## Analysis (Part 20.1)
+```{r}
+AIage_m4_m1 <- lm(every_post_AIage_m1 ~ 
+                            every_post_actual_m1)
+ip_m4_m1 <- influencePlot(AIage_m4_m1)
+ip_m4_m1
+4/length(every_post_actual_m1) # Hat-values limit for Influcence Plot
+# High Leverage Points: 18, 27, 28 (? > 4/n for Hat-values)
+# Outlier Points: 11, 130 (StudRes is either [-2 > ? > +2])
+# Good Leverage Points: 18, 27, 28 (? > 4/n for Hat values & within [-2 > ? > +2])
+# Bad Leverage Points: N/A (? > 4/n for Hat values & outside [-2 > ? > +2]
+```
+
+## Analysis (Part 21.1)
+```{r}
+# Finding the Correlation Cofficients for ALL "post-measures" for AI M1
+every_post_cor_old_m1 <- cor(every_post_AIage_m1, 
+                            every_post_actual_m1)
+
+every_post_cor_compare_m1 <- data.frame(Correlation=c(every_post_cor_old_m1),
+                             Type=c("All Points"))
+every_post_cor_compare_m1 # No Bad Leverage Points
+
+# Run the Linear Regression
+every_all_post_m1_m1 <- lm(every_post_AIage_m1 ~
+                                 every_post_actual_m1)
+summary(every_all_post_m1_m1)
+
+every_all_post_r_compare_m1 <- data.frame(R_sq=c(summary(every_all_post_m1_m1)$r.squared),
+                             Type=c("All Points")) 
+every_all_post_r_compare_m1 # No Bad Leverage Points
+```
+
+
+
+# Testing Reliability for ALL Combinations of "post-measurements" [AI Model 2]
+
+**NOTE:** The parts are as follows...
+  i) "post" & "post_2" are Parts 1.2 - 6.2
+  ii) "post" & "post_3" are Parts 7.2 - 11.2
+  iii) "post_2" & "post_3" are Parts 12.2 - 16.2
+  iv) Every "post-measurement" are Parts 17.2 - 21.2
+
+## Analysis (Part 1.2)
+```{r}
+## Re-order the dataset
+nrow(d)
+for (i in 1:301) {
+  if(d$patient_name[i] %in% d$patient_name[i+1])
+  {
+    if(d$pre_or_post_operation[i] %in% "post_2" &&
+       d$pre_or_post_operation[i+1] %in% "post")
+    {
+      temp <- d[i,]
+      d[i,] <- d[i+1,]
+      d[i+1,] <- temp
+    }
+  }
+}
+```
+
+## Analysis (Part 2.2)
+```{r, warning=FALSE, message=FALSE}
+age11_m2 <- which(d$pre_or_post_operation %in% "post")
+age2_m2 <- which(d$pre_or_post_operation %in% "post_2")
+age3_m2 <- which(d$pre_or_post_operation %in% "post_3")
+all_post_m2 <- sort(c(age11_m2, age2_m2 ,age3_m2))
+age1_m2 <- age2_m2 - 1
+
+age2_post_m2 <- d$ai_model_2[age2_m2]
+age1_post_m2 <- d$ai_model_2[age1_m2]
+age3_post_m2 <- d$ai_model_2[age3_m2]
+post1.2_diff_m2 <- d$age_actual[age2_m2] - d$age_actual[age1_m2]
+hist(post1.2_diff_m2)
+```
+
+## Analysis (Part 3.2)
+```{r}
+## Compute the coefficient of correlation of two postdicted age for "post" & "post_2" for AI M2
+all_post1.2_index_m2 <- sort(c(age1_m2, age2_m2))
+length(all_post1.2_index_m2)/2
+AIage_post_m2 <- numeric(24)
+AIage_post2_m2 <- numeric(24)
+for (i in 1:24) {
+  temp <- i * 2 -1
+  if(d$age_actual[all_post1.2_index_m2[temp]] > 
+     d$age_actual[all_post1.2_index_m2[temp + 1]])
+  {
+    AIage_post_m2[i] <- d$ai_model_2[all_post1.2_index_m2[temp + 1]]
+    AIage_post2_m2[i] <- d$ai_model_2[all_post1.2_index_m2[temp]]
+  }
+  else{
+    AIage_post_m2[i] <- d$ai_model_2[all_post1.2_index_m2[temp]]
+    AIage_post2_m2[i] <- d$ai_model_2[all_post1.2_index_m2[temp + 1]]
+  }
+}
+```
+
+## Analysis (Part 4.2)
+```{r}
+post1.2_age_mx_m2 <- cbind(post1.2_diff_m2, age2_post_m2 - age1_post_m2)
+post1.2_age_mx_m2 # might be better to look at head(...) and tail(...)
+# Make subgroups for time
+## Over Half Years & Over Full Years
+time1_age_m2 <- c(which(post1.2_diff_m2 > 0.5),
+                    which(post1.2_diff_m2 < -0.5))
+time1_age_m2 <- sort(time1_age_m2)
+
+time2_age_m2 <- which(post1.2_diff_m2 >= -1 & 
+              post1.2_diff_m2 <= 1)
+time2_age_m2 <- sort(time2_age_m2)
+
+time3_age_m2 <- c(which(post1.2_diff_m2 < -1),
+        which(post1.2_diff_m2 > 1))
+time3_age_m2 <- sort(time3_age_m2)
+
+# Correlations
+cor1_m2 <- cor(AIage_post_m2, AIage_post2_m2)
+cor2_m2 <- cor(AIage_post_m2[time1_age_m2], AIage_post2_m2[time1_age_m2])
+cor3_m2 <- cor(AIage_post_m2[time2_age_m2], AIage_post2_m2[time2_age_m2])
+cor4_m2 <- cor(AIage_post_m2[time3_age_m2], AIage_post2_m2[time3_age_m2])
+
+post1.2_cor_mx_m2 <- data.frame(Correlation=c(cor1_m2, cor2_m2, 
+                                             cor3_m2, cor4_m2),
+                        Conditions=c("No Conditions", "Over Half Year", 
+                                     "Over Full Year", "Within 1 Year"))
+post1.2_cor_mx_m2
+```
+
+## Analysis (Part 5.2)
+```{r}
+AIage_m1_m2 <- lm(AIage_post_m2 ~ AIage_post2_m2)
+ip_m1_m2 <- influencePlot(AIage_m1_m2)
+ip_m1_m2
+4/length(AIage_post_m2) # Hat-values limit for Influcence Plot
+# High Leverage Points: 18 (? > 4/n for Hat-values)
+# Outlier Points: 2, 10 (StudRes is either [-2 > ? > +2])
+# Good Leverage Points: 18 (? > 4/n for Hat values & within [-2 > ? > +2])
+# Bad Leverage Points: N/A (? > 4/n for Hat values & outside [-2 > ? > +2])
+```
+
+## Analysis (Part 6.2)
+```{r}
+# Finding the Correlation Cofficients for "post" & "post_2" for AI M2
+post1.2_cor_old_m2 <- cor(age1_post_m2, age2_post_m2)
+
+post1.2_cor_compare_m2 <- data.frame(Correlation=c(post1.2_cor_old_m2),
+                             Type=c("All Points"))
+post1.2_cor_compare_m2 # No Bad Leverage Points
+
+# Run the Linear Regression
+post1.2_all_m1_m2 <- lm(age1_post_m2 ~ age2_post_m2)
+summary(post1.2_all_m1_m2)
+
+post1.2_r_compare_m2 <- data.frame(R_sq=c(summary(post1.2_all_m1_m2)$r.squared),
+                             Type=c("All Points")) 
+post1.2_r_compare_m2 # No Bad Leverage Points
+```
+
+## Analysis (Part 7.2)
+```{r}
+# Set up data for "post" & "post_3" for AI M2
+post1.3_m2 <- age3_m2 - 2
+post1.3_df <- d[sort(c(post1.3_m2, age3_m2)),]
+post1_m2 <- which(post1.3_df$pre_or_post_operation %in% "post")
+post3_m2 <- which(post1.3_df$pre_or_post_operation %in% "post_3")
+
+# Note: Last year's messed up and had c(1,3,5,7,9,11,14,16,18) -> "post", BUT the actual points should be c(1,3,5,7,9,11,13,15,17); Same goes for "post_3" since they put c(2,4,6,8,10,12,13,15,17), BUT the actual points should be c(2,4,6,8,10,12,14,16,18)
+post1_df_m2 <- post1.3_df[post1_m2,] 
+post3_df_m2 <- post1.3_df[post3_m2,]
+```
+
+## Analysis (Part 8.2)
+```{r}
+post1.3_diff_m2 <- post3_df_m2$age_actual - post1_df_m2$age_actual
+post1_AIage_m2 <- post1_df_m2$ai_model_2
+post3_AIage_m2 <- post3_df_m2$ai_model_2
+hist(post1.3_diff_m2)
+```
+
+## Analysis (Part 9.2)
+```{r}
+# Make subgroups for time
+## Over Half Years & Over Full Years
+time4_age_m2 <- c(which(post1.3_diff_m2 > 0.5),
+                    which(post1.3_diff_m2 < -0.5))
+time4_age_m2 <- sort(time4_age_m2)
+
+time5_age_m2 <- which(post1.3_diff_m2 >= -1 & 
+              post1.3_diff_m2 <= 1)
+time5_age_m2 <- sort(time5_age_m2)
+
+time6_age_m2 <- c(which(post1.3_diff_m2 < -1),
+        which(post1.3_diff_m2 > 1))
+time6_age_m2 <- sort(time6_age_m2)
+
+# Correlations
+cor5_m2 <- cor(post1_AIage_m2, post3_AIage_m2)
+cor6_m2 <- cor(post1_AIage_m2[time4_age_m2], post3_AIage_m2[time4_age_m2])
+cor7_m2 <- cor(post1_AIage_m2[time5_age_m2], post3_AIage_m2[time5_age_m2])
+cor8_m2 <- cor(post1_AIage_m2[time6_age_m2], post3_AIage_m2[time6_age_m2])
+
+post1.3_cor_mx_m2 <- data.frame(Correlation=c(cor5_m2, cor6_m2, 
+                                             cor7_m2, cor8_m2),
+                        Conditions=c("No Conditions", "Over Half Year", 
+                                     "Over Full Year", "Within 1 Year"))
+post1.3_cor_mx_m2
+```
+
+## Analysis (Part 10.2)
+```{r}
+AIage_m2_m2 <- lm(post1_AIage_m2 ~ post3_AIage_m2)
+ip_m2_m2 <- influencePlot(AIage_m2_m2)
+ip_m2_m2
+4/length(post1_AIage_m2) # Hat-values limit for Influcence Plot
+# High Leverage Points: N/A (? > 4/n for Hat-values)
+# Outlier Points: N/A (StudRes is either [-2 > ? > +2])
+# Good Leverage Points: N/A (? > 4/n for Hat values & within [-2 > ? > +2])
+# Bad Leverage Points: N/A (? > 4/n for Hat values & outside [-2 > ? > +2])
+```
+
+## Analysis (Part 11.2)
+```{r}
+# Finding the Correlation Cofficients for "post" & "post_3" for AI M2
+post1.3_cor_old_m2 <- cor(post1_AIage_m2, post3_AIage_m2)
+
+post1.3_cor_compare_m2 <- data.frame(Correlation=c(post1.3_cor_old_m2),
+                             Type=c("All Points"))
+post1.3_cor_compare_m2 # No Bad Leverage Points
+
+# Run the Linear Regression
+post1.3_all_m1_m2 <- lm(post1_AIage_m2 ~ post3_AIage_m2)
+summary(post1.3_all_m1_m2)
+
+post1.3_r_compare_m2 <- data.frame(R_sq=c(summary(post1.3_all_m1_m2)$r.squared),
+                             Type=c("All Points")) 
+post1.3_r_compare_m2 # No Bad Leverage Points
+```
+
+## Analysis (Part 12.2)
+```{r}
+# Set up data for "post_2" & "post_3" for AI M2
+post2.3_m2 <- age3_m2 - 1
+post2.3_df <- d[sort(c(post2.3_m2, age3_m2)),]
+post2_m2 <- which(post2.3_df$pre_or_post_operation %in% "post_2")
+post3_m2 <- which(post2.3_df$pre_or_post_operation %in% "post_3")
+
+# Note: Last year's messed up and had c(1,3,5,7,10,11,14,16,18) -> "post_2", BUT the actual points should be c(1,3,5,7,9,11,13,15,17); Same goes for "post_3" since they put c(2,4,6,8,10,12,13,15,17), BUT the actual points should be c(2,4,6,8,10,12,14,16,18)
+post2_df_m2 <- post2.3_df[post2_m2,] 
+post3_df_m2 <- post2.3_df[post3_m2,]
+```
+
+## Analysis (Part 13.2)
+```{r}
+post2.3_diff_m2 <- post3_df_m2$age_actual - post2_df_m2$age_actual
+post2_AIage_m2 <- post2_df_m2$ai_model_2
+post3_AIage_m2 <- post3_df_m2$ai_model_2
+hist(post2.3_diff_m2)
+```
+
+## Analysis (Part 14.2)
+```{r}
+# Make subgroups for time
+## Over Half Years & Over Full Years
+time7_age_m2 <- c(which(post2.3_diff_m2 > 0.5),
+                    which(post2.3_diff_m2 < -0.5))
+time7_age_m2 <- sort(time7_age_m2)
+
+time8_age_m2 <- which(post2.3_diff_m2 >= -1 & 
+              post2.3_diff_m2 <= 1)
+time8_age_m2 <- sort(time8_age_m2)
+
+time9_age_m2 <- c(which(post2.3_diff_m2 < -1),
+        which(post2.3_diff_m2 > 1))
+time9_age_m2 <- sort(time9_age_m2)
+
+# Correlations
+cor9_m2 <- cor(post2_AIage_m2, post3_AIage_m2)
+cor10_m2 <- cor(post2_AIage_m2[time7_age_m2], post3_AIage_m2[time7_age_m2])
+cor11_m2 <- cor(post2_AIage_m2[time8_age_m2], post3_AIage_m2[time8_age_m2])
+cor12_m2 <- cor(post2_AIage_m2[time9_age_m2], post3_AIage_m2[time9_age_m2])
+
+post2.3_cor_mx_m2 <- data.frame(Correlation=c(cor9_m2, cor10_m2, 
+                                             cor11_m2, cor12_m2),
+                        Conditions=c("No Conditions", "Over Half Year", 
+                                     "Over Full Year", "Within 1 Year"))
+post2.3_cor_mx_m2 # We have N/A since either one or no points for the time given
+```
+
+## Analysis (Part 15.2)
+```{r}
+AIage_m3_m2 <- lm(post2_AIage_m2 ~ post3_AIage_m2)
+ip_m3_m2 <- influencePlot(AIage_m3_m2)
+ip_m3_m2
+4/length(post2_AIage_m2) # Hat-values limit for Influcence Plot
+# High Leverage Points: 4 (? > 4/n for Hat-values)
+# Outlier Points: N/A (StudRes is either [-2 > ? > +2])
+# Good Leverage Points: N/A (? > 4/n for Hat values & within [-2 > ? > +2])
+# Bad Leverage Points: N/A (? > 4/n for Hat values & outside [-2 > ? > +2])
+```
+
+## Analysis (Part 16.2)
+```{r}
+# Finding the Correlation Cofficients for "post_2" & "post_3" for AI M2
+post2.3_cor_old_m2 <- cor(post2_AIage_m2, post3_AIage_m2)
+
+post2.3_cor_compare_m2 <- data.frame(Correlation=c(post2.3_cor_old_m2),
+                             Type=c("All Points"))
+post2.3_cor_compare_m2 # No Bad Leverage Points
+
+# Run the Linear Regression
+post2.3_all_m1_m2 <- lm(post2_AIage_m2 ~ post3_AIage_m2)
+summary(post2.3_all_m1_m2)
+
+post2.3_r_compare_m2 <- data.frame(R_sq=c(summary(post2.3_all_m1_m2)$r.squared),
+                             Type=c("All Points")) 
+post2.3_r_compare_m2 # No Bad Leverage Points
+```
+
+## Analysis (Part 17.2)
+```{r, warning=FALSE, message=FALSE}
+every_post_m2 <- sort(which(d$pre_or_post_operation %in% c("post", "post_2",
+                                                        "post_3")))
+every_post_diff_m2 <- d$age_actual[every_post_m2] - d$ai_model_2[every_post_m2]
+hist(every_post_diff_m2)
+```
+
+## Analysis (Part 18.2)
+```{r}
+every_post_actual_m2 <- d$age_actual[every_post_m2]
+every_post_AIage_m2 <- d$ai_model_2[every_post_m2]
+```
+
+## Analysis (19.2)
+```{r}
+# Make subgroups for time
+## Over Half Years & Over Full Years
+time10_age_m2 <- c(which(every_post_diff_m2 > 0.5),
+                    which(every_post_diff_m2 < -0.5))
+time10_age_m2 <- sort(time10_age_m2)
+
+time11_age_m2 <- which(every_post_diff_m2 >= -1 & 
+              every_post_diff_m2 <= 1)
+time11_age_m2 <- sort(time11_age_m2)
+
+time12_age_m2 <- c(which(every_post_diff_m2 < -1),
+        which(every_post_diff_m2 > 1))
+time12_age_m2 <- sort(time12_age_m2)
+
+# Correlations
+cor13_m2 <- cor(every_post_AIage_m2, 
+                every_post_actual_m2)
+cor14_m2 <- cor(every_post_AIage_m2[time10_age_m2],
+                every_post_actual_m2[time10_age_m2])
+cor15_m2 <- cor(every_post_AIage_m2[time11_age_m2],
+                every_post_actual_m2[time11_age_m2])
+cor16_m2 <- cor(every_post_AIage_m2[time12_age_m2],
+                every_post_actual_m2[time12_age_m2])
+
+every_post_cor_mx_m2 <- data.frame(Correlation=c(cor13_m2, cor14_m2, 
+                                             cor15_m2, cor16_m2),
+                        Conditions=c("No Conditions", "Over Half Year", 
+                                     "Over Full Year", "Within 1 Year"))
+every_post_cor_mx_m2
+```
+
+## Analysis (Part 20.2)
+```{r}
+AIage_m4_m2 <- lm(every_post_AIage_m2 ~ 
+                            every_post_actual_m2)
+ip_m4_m2 <- influencePlot(AIage_m4_m2)
+ip_m4_m2
+4/length(every_post_actual_m2) # Hat-values limit for Influcence Plot
+# High Leverage Points: 27, 28 (? > 4/n for Hat-values)
+# Outlier Points: 13, 46 (StudRes is either [-2 > ? > +2])
+# Good Leverage Points: 27, 28 (? > 4/n for Hat values & within [-2 > ? > +2])
+# Bad Leverage Points: N/A (? > 4/n for Hat values & outside [-2 > ? > +2])
+```
+
+## Analysis (Part 21.2)
+```{r}
+# Finding the Correlation Cofficients for ALL "post-measures" for AI M2
+every_post_cor_old_m2 <- cor(every_post_AIage_m2, 
+                            every_post_actual_m2)
+
+every_post_cor_compare_m2 <- data.frame(Correlation=c(every_post_cor_old_m2),
+                             Type=c("All Points"))
+every_post_cor_compare_m2 # No Bad Leverage Points
+
+# Run the Linear Regression
+every_all_post_m1_m2 <- lm(every_post_AIage_m2 ~
+                                 every_post_actual_m2)
+summary(every_all_post_m1_m2)
+
+every_all_post_r_compare_m2 <- data.frame(R_sq=c(summary(every_all_post_m1_m2)$r.squared),
+                             Type=c("All Points")) 
+every_all_post_r_compare_m2 # No Bad Leverage Points
+```
+
+
+
+# Testing Reliability for ALL Combinations of "post-measurements" [AI Model 3]
+
+**NOTE:** The parts are as follows...
+  i) "post" & "post_2" are Parts 1.3 - 6.3
+  ii) "post" & "post_3" are Parts 7.3 - 11.3
+  iii) "post_2" & "post_3" are Parts 12.3 - 16.3
+  iv) Every "post-measurement" are Parts 17.3 - 21.3
+
+## Analysis (Part 1.3)
+```{r}
+## Re-order the dataset
+nrow(d)
+for (i in 1:301) {
+  if(d$patient_name[i] %in% d$patient_name[i+1])
+  {
+    if(d$pre_or_post_operation[i] %in% "post_2" &&
+       d$pre_or_post_operation[i+1] %in% "post")
+    {
+      temp <- d[i,]
+      d[i,] <- d[i+1,]
+      d[i+1,] <- temp
+    }
+  }
+}
+```
+
+## Analysis (Part 2.3)
+```{r, warning=FALSE, message=FALSE}
+age11_m3 <- which(d$pre_or_post_operation %in% "post")
+age2_m3 <- which(d$pre_or_post_operation %in% "post_2")
+age3_m3 <- which(d$pre_or_post_operation %in% "post_3")
+all_post_m3 <- sort(c(age11_m3, age2_m3 ,age3_m3))
+age1_m3 <- age2_m3 - 1
+
+age2_post_m3 <- d$ai_model_3[age2_m3]
+age1_post_m3 <- d$ai_model_3[age1_m3]
+age3_post_m3 <- d$ai_model_3[age3_m3]
+post1.2_diff_m3 <- d$age_actual[age2_m3] - d$age_actual[age1_m3]
+hist(post1.2_diff_m3)
+```
+
+## Analysis (Part 3.3)
+```{r}
+## Compute the coefficient of correlation of two postdicted age for "post" & "post_2" for AI M3
+all_post1.2_index_m3 <- sort(c(age1_m3, age2_m3))
+length(all_post1.2_index_m3)/2
+AIage_post_m3 <- numeric(24)
+AIage_post2_m3 <- numeric(24)
+for (i in 1:24) {
+  temp <- i * 2 -1
+  if(d$age_actual[all_post1.2_index_m3[temp]] > 
+     d$age_actual[all_post1.2_index_m3[temp + 1]])
+  {
+    AIage_post_m3[i] <- d$ai_model_3[all_post1.2_index_m3[temp + 1]]
+    AIage_post2_m3[i] <- d$ai_model_3[all_post1.2_index_m3[temp]]
+  }
+  else{
+    AIage_post_m3[i] <- d$ai_model_3[all_post1.2_index_m3[temp]]
+    AIage_post2_m3[i] <- d$ai_model_3[all_post1.2_index_m3[temp + 1]]
+  }
+}
+```
+
+## Analysis (Part 4.3)
+```{r}
+post1.2_age_mx_m3 <- cbind(post1.2_diff_m3, age2_post_m3 - age1_post_m3)
+post1.2_age_mx_m3 # might be better to look at head(...) and tail(...)
+# Make subgroups for time
+## Over Half Years & Over Full Years
+time1_age_m3 <- c(which(post1.2_diff_m3 > 0.5),
+                    which(post1.2_diff_m3 < -0.5))
+time1_age_m3 <- sort(time1_age_m3)
+
+time2_age_m3 <- which(post1.2_diff_m3 >= -1 & 
+              post1.2_diff_m3 <= 1)
+time2_age_m3 <- sort(time2_age_m3)
+
+time3_age_m3 <- c(which(post1.2_diff_m3 < -1),
+        which(post1.2_diff_m3 > 1))
+time3_age_m3 <- sort(time3_age_m3)
+
+# Correlations
+cor1_m3 <- cor(AIage_post_m3, AIage_post2_m3)
+cor2_m3 <- cor(AIage_post_m3[time1_age_m3], AIage_post2_m3[time1_age_m3])
+cor3_m3 <- cor(AIage_post_m3[time2_age_m3], AIage_post2_m3[time2_age_m3])
+cor4_m3 <- cor(AIage_post_m3[time3_age_m3], AIage_post2_m3[time3_age_m3])
+
+post1.2_cor_mx_m3 <- data.frame(Correlation=c(cor1_m3, cor2_m3, 
+                                             cor3_m3, cor4_m3),
+                        Conditions=c("No Conditions", "Over Half Year", 
+                                     "Over Full Year", "Within 1 Year"))
+post1.2_cor_mx_m3
+```
+
+## Analysis (Part 5.3)
+```{r}
+AIage_m1_m3 <- lm(AIage_post_m3 ~ AIage_post2_m3)
+ip_m1_m3 <- influencePlot(AIage_m1_m3)
+ip_m1_m3
+4/length(AIage_post_m3) # Hat-values limit for Influcence Plot
+# High Leverage Points: N/A (? > 4/n for Hat-values)
+# Outlier Points: 7, 16 (StudRes is either [-2 > ? > +2])
+# Good Leverage Points: N/A (? > 4/n for Hat values & within [-2 > ? > +2])
+# Bad Leverage Points: N/A (? > 4/n for Hat values & outside [-2 > ? > +2])
+```
+
+## Analysis (Part 6.3)
+```{r}
+# Finding the Correlation Cofficients for "post" & "post_2" for AI M3
+post1.2_cor_old_m3 <- cor(age1_post_m3, age2_post_m3)
+
+post1.2_cor_compare_m3 <- data.frame(Correlation=c(post1.2_cor_old_m3),
+                             Type=c("All Points"))
+post1.2_cor_compare_m3 # No Bad Leverage Points
+
+# Run the Linear Regression
+post1.2_all_m1_m3 <- lm(age1_post_m3 ~ age2_post_m3)
+summary(post1.2_all_m1_m3)
+
+post1.2_r_compare_m3 <- data.frame(R_sq=c(summary(post1.2_all_m1_m3)$r.squared),
+                             Type=c("All Points")) 
+post1.2_r_compare_m3 # No Bad Leverage Points
+```
+
+## Analysis (Part 7.3)
+```{r}
+# Set up data for "post" & "post_3" for AI M3
+post1.3_m3 <- age3_m3 - 2
+post1.3_df <- d[sort(c(post1.3_m3, age3_m3)),]
+post1_m3 <- which(post1.3_df$pre_or_post_operation %in% "post")
+post3_m3 <- which(post1.3_df$pre_or_post_operation %in% "post_3")
+
+# Note: Last year's messed up and had c(1,3,5,7,9,11,14,16,18) -> "post", BUT the actual points should be c(1,3,5,7,9,11,13,15,17); Same goes for "post_3" since they put c(2,4,6,8,10,12,13,15,17), BUT the actual points should be c(2,4,6,8,10,12,14,16,18)
+post1_df_m3 <- post1.3_df[post1_m3,] 
+post3_df_m3 <- post1.3_df[post3_m3,]
+```
+
+## Analysis (Part 8.3)
+```{r}
+post1.3_diff_m3 <- post3_df_m3$age_actual - post1_df_m3$age_actual
+post1_AIage_m3 <- post1_df_m3$ai_model_3
+post3_AIage_m3 <- post3_df_m3$ai_model_3
+hist(post1.3_diff_m3)
+```
+
+## Analysis (Part 9.3)
+```{r}
+# Make subgroups for time
+## Over Half Years & Over Full Years
+time4_age_m3 <- c(which(post1.3_diff_m3 > 0.5),
+                    which(post1.3_diff_m3 < -0.5))
+time4_age_m3 <- sort(time4_age_m3)
+
+time5_age_m3 <- which(post1.3_diff_m3 >= -1 & 
+              post1.3_diff_m3 <= 1)
+time5_age_m3 <- sort(time5_age_m3)
+
+time6_age_m3 <- c(which(post1.3_diff_m3 < -1),
+        which(post1.3_diff_m3 > 1))
+time6_age_m3 <- sort(time6_age_m3)
+
+# Correlations
+cor5_m3 <- cor(post1_AIage_m3, post3_AIage_m3)
+cor6_m3 <- cor(post1_AIage_m3[time4_age_m3], post3_AIage_m3[time4_age_m3])
+cor7_m3 <- cor(post1_AIage_m3[time5_age_m3], post3_AIage_m3[time5_age_m3])
+cor8_m3 <- cor(post1_AIage_m3[time6_age_m3], post3_AIage_m3[time6_age_m3])
+
+post1.3_cor_mx_m3 <- data.frame(Correlation=c(cor5_m3, cor6_m3, 
+                                             cor7_m3, cor8_m3),
+                        Conditions=c("No Conditions", "Over Half Year", 
+                                     "Over Full Year", "Within 1 Year"))
+post1.3_cor_mx_m3
+```
+
+## Analysis (Part 10.3)
+```{r}
+AIage_m2_m3 <- lm(post1_AIage_m3 ~ post3_AIage_m3)
+ip_m2_m3 <- influencePlot(AIage_m2_m3)
+ip_m2_m3
+4/length(post1_AIage_m3) # Hat-values limit for Influcence Plot
+# High Leverage Points: N/A (? > 4/n for Hat-values)
+# Outlier Points: 5 (StudRes is either [-2 > ? > +2])
+# Good Leverage Points: N/A (? > 4/n for Hat values & within [-2 > ? > +2])
+# Bad Leverage Points: N/A (? > 4/n for Hat values & outside [-2 > ? > +2])
+```
+
+## Analysis (Part 11.3)
+```{r}
+# Finding the Correlation Cofficients for "post" & "post_3" for AI M3
+post1.3_cor_old_m3 <- cor(post1_AIage_m3, post3_AIage_m3)
+
+post1.3_cor_compare_m3 <- data.frame(Correlation=c(post1.3_cor_old_m3),
+                             Type=c("All Points"))
+post1.3_cor_compare_m3 # No Bad Leverage Points
+
+# Run the Linear Regression
+post1.3_all_m1_m3 <- lm(post1_AIage_m3 ~ post3_AIage_m3)
+summary(post1.3_all_m1_m3)
+
+post1.3_r_compare_m3 <- data.frame(R_sq=c(summary(post1.3_all_m1_m3)$r.squared),
+                             Type=c("All Points")) 
+post1.3_r_compare_m3 # No Bad Leverage Points
+```
+
+## Analysis (Part 12.3)
+```{r}
+# Set up data for "post_2" & "post_3" for AI M3
+post2.3_m3 <- age3_m3 - 1
+post2.3_df <- d[sort(c(post2.3_m3, age3_m3)),]
+post2_m3 <- which(post2.3_df$pre_or_post_operation %in% "post_2")
+post3_m3 <- which(post2.3_df$pre_or_post_operation %in% "post_3")
+
+# Note: Last year's messed up and had c(1,3,5,7,10,11,14,16,18) -> "post_2", BUT the actual points should be c(1,3,5,7,9,11,13,15,17); Same goes for "post_3" since they put c(2,4,6,8,10,12,13,15,17), BUT the actual points should be c(2,4,6,8,10,12,14,16,18)
+post2_df_m3 <- post2.3_df[post2_m3,] 
+post3_df_m3 <- post2.3_df[post3_m3,]
+```
+
+## Analysis (Part 13.3)
+```{r}
+post2.3_diff_m3 <- post3_df_m3$age_actual - post2_df_m3$age_actual
+post2_AIage_m3 <- post2_df_m3$ai_model_3
+post3_AIage_m3 <- post3_df_m3$ai_model_3
+hist(post2.3_diff_m3)
+```
+
+## Analysis (Part 14.3)
+```{r}
+# Make subgroups for time
+## Over Half Years & Over Full Years
+time7_age_m3 <- c(which(post2.3_diff_m3 > 0.5),
+                    which(post2.3_diff_m3 < -0.5))
+time7_age_m3 <- sort(time7_age_m3)
+
+time8_age_m3 <- which(post2.3_diff_m3 >= -1 & 
+              post2.3_diff_m3 <= 1)
+time8_age_m3 <- sort(time8_age_m3)
+
+time9_age_m3 <- c(which(post2.3_diff_m3 < -1),
+        which(post2.3_diff_m3 > 1))
+time9_age_m3 <- sort(time9_age_m3)
+
+# Correlations
+cor9_m3 <- cor(post2_AIage_m3, post3_AIage_m3)
+cor10_m3 <- cor(post2_AIage_m3[time7_age_m3], post3_AIage_m3[time7_age_m3])
+cor11_m3 <- cor(post2_AIage_m3[time8_age_m3], post3_AIage_m3[time8_age_m3])
+cor12_m3 <- cor(post2_AIage_m3[time9_age_m3], post3_AIage_m3[time9_age_m3])
+
+post2.3_cor_mx_m3 <- data.frame(Correlation=c(cor9_m3, cor10_m3, 
+                                             cor11_m3, cor12_m3),
+                        Conditions=c("No Conditions", "Over Half Year", 
+                                     "Over Full Year", "Within 1 Year"))
+post2.3_cor_mx_m3 # We have N/A since either one or no points for the time given
+```
+
+## Analysis (Part 15.3)
+```{r}
+AIage_m3_m3 <- lm(post2_AIage_m3 ~ post3_AIage_m3)
+ip_m3_m3 <- influencePlot(AIage_m3_m3)
+ip_m3_m3
+4/length(post3_AIage_m3) # Hat-values limit for Influcence Plot
+# High Leverage Points: N/A (? > 4/n for Hat-values)
+# Outlier Points: 5 (StudRes is either [-2 > ? > +2])
+# Good Leverage Points: N/A (? > 4/n for Hat values & within [-2 > ? > +2])
+# Bad Leverage Points: N/A (? > 4/n for Hat values & outside [-2 > ? > +2])
+```
+
+## Analysis (Part 16.3)
+```{r}
+# Finding the Correlation Cofficients for "post_2" & "post_3" for AI M3
+post2.3_cor_old_m3 <- cor(post2_AIage_m3, post3_AIage_m3)
+
+post2.3_cor_compare_m3 <- data.frame(Correlation=c(post2.3_cor_old_m3),
+                             Type=c("All Points"))
+post2.3_cor_compare_m3 # No Bad Leverage Points
+
+# Run the Linear Regression
+post2.3_all_m1_m3 <- lm(post2_AIage_m3 ~ post3_AIage_m3)
+summary(post2.3_all_m1_m3) # this is a fairly high reliability
+
+post2.3_r_compare_m3 <- data.frame(R_sq=c(summary(post2.3_all_m1_m3)$r.squared),
+                             Type=c("All Points")) 
+post2.3_r_compare_m3 # No Bad Leverage Points
+```
+
+## Analysis (Part 17.3)
+```{r, warning=FALSE, message=FALSE}
+every_post_m3 <- sort(which(d$pre_or_post_operation %in% c("post", "post_2",
+                                                        "post_3")))
+every_post_diff_m3 <- d$age_actual[every_post_m3] - d$ai_model_3[every_post_m3]
+hist(every_post_diff_m3)
+```
+
+## Analysis (Part 18.3)
+```{r}
+every_post_actual_m3 <- d$age_actual[every_post_m3]
+every_post_AIage_m3 <- d$ai_model_3[every_post_m3]
+```
+
+## Analysis (19.3)
+```{r}
+# Make subgroups for time
+## Over Half Years & Over Full Years
+time10_age_m3 <- c(which(every_post_diff_m3 > 0.5),
+                    which(every_post_diff_m3 < -0.5))
+time10_age_m3 <- sort(time10_age_m3)
+
+time11_age_m3 <- which(every_post_diff_m3 >= -1 & 
+              every_post_diff_m3 <= 1)
+time11_age_m3 <- sort(time11_age_m3)
+
+time12_age_m3 <- c(which(every_post_diff_m3 < -1),
+        which(every_post_diff_m3 > 1))
+time12_age_m3 <- sort(time12_age_m3)
+
+# Correlations
+cor13_m3 <- cor(every_post_AIage_m3, 
+                every_post_actual_m3)
+cor14_m3 <- cor(every_post_AIage_m3[time10_age_m3],
+                every_post_actual_m3[time10_age_m3])
+cor15_m3 <- cor(every_post_AIage_m3[time11_age_m3],
+                every_post_actual_m3[time11_age_m3])
+cor16_m3 <- cor(every_post_AIage_m3[time12_age_m3],
+                every_post_actual_m3[time12_age_m3])
+
+every_post_cor_mx_m3 <- data.frame(Correlation=c(cor13_m3, cor14_m3, 
+                                             cor15_m3, cor16_m3),
+                        Conditions=c("No Conditions", "Over Half Year", 
+                                     "Over Full Year", "Within 1 Year"))
+every_post_cor_mx_m3
+```
+
+## Analysis (Part 20.3)
+```{r}
+AIage_m4_m3 <- lm(every_post_AIage_m3 ~ 
+                            every_post_actual_m3)
+ip_m4_m3 <- influencePlot(AIage_m4_m3)
+ip_m4_m3
+4/length(every_post_AIage_m3) # Hat-values limit for Influcence Plot
+# High Leverage Points: 26, 27, 28 (? > 4/n for Hat-values)
+# Outlier Points: 26, 68, 130 (StudRes is either [-2 > ? > +2])
+# Good Leverage Points: 27, 28 (? > 4/n for Hat values & within [-2 > ? > +2])
+# Bad Leverage Points: 26 (? > 4/n for Hat values & outside [-2 > ? > +2])
+lev_m4_m3 <- d[which(d$pre_or_post_operation %in% c("post","post_2","post_3")),]
+lev_m4_m3[26, c(6,7,10)] # (might remove this Bad Leverage)
+# We'll see what happens when we remove the Bad Leverage...
+```
+
+## Analysis (Part 21.3)
+```{r}
+# Finding the Correlation Cofficients for ALL "post-measures" for AI M3
+every_post_cor_old_m3 <- cor(every_post_AIage_m3, 
+                            every_post_actual_m3)
+every_post_cor_improved_m3 <- cor(every_post_AIage_m3[-c(26)], 
+                            every_post_actual_m3[-c(26)])
+
+every_post_cor_compare_m3 <- data.frame(Correlation=c(every_post_cor_old_m3,
+                                                every_post_cor_improved_m3),
+                             Type=c("All Points", "Removed Bad Leverages"))
+every_post_cor_compare_m3 # Removing the Bad Leverage Points (points 26) improves the reliability
+
+# Run the Linear Regression
+every_all_post_m1_m3 <- lm(every_post_actual_m3 ~
+                                 every_post_AIage_m3)
+summary(every_all_post_m1_m3)
+
+every_improved_post_m1_m3 <- lm(every_post_actual_m3[-c(26)] ~
+                                 every_post_AIage_m3[-c(26)])
+summary(every_improved_post_m1_m3)
+
+
+every_all_post_r_compare_m3 <- data.frame(R_sq=c(summary(every_all_post_m1_m3)$r.squared,
+                  summary(every_improved_post_m1_m3)$r.squared),
+                             Type=c("All Points", "Removed Bad Leverages")) 
+every_all_post_r_compare_m3 # R-Squared improved slightly
+
+# Conclusion: It might be better to not remove the Bad Leverage Point 26 for Model 3. By observation, it approcimately was off by 10 years. This is for comparing ALL "pre-meausres" ONLY!
+lev_m4_m3[26, c(6,7,10)] # No big difference on results when removed!
+as.numeric(lev_m4_m3[51, 7] - lev_m4_m3[51, 10]) # How much it was off by
+```
+
+
+
+# post-Measurements Table
+## Model 1
+```{r}
+post_table_m1 <- matrix(nrow=4, ncol=5, byrow=TRUE,
+                       c(cor1_m1,cor2_m1,cor3_m1,cor4_m1,
+                         NA,
+                         cor5_m1,cor6_m1,cor7_m1,cor8_m1,
+                         NA,
+                         cor9_m1,cor10_m1,cor11_m1,cor12_m1,
+                         NA,
+                         cor13_m1, cor14_m1, cor15_m1, cor16_m1,
+                         NA))
+rownames(post_table_m1) <- c("post1 - post2", "post1 - post3", "post2 - post3",
+                            "All post-Measures")
+colnames(post_table_m1) <- c("No Conditions", "Over Half Year", 
+                                     "Over Full Year", "Within 1 Year",
+                            "Removed Bad Leverage(s)")
+
+# c("No Conditions","0.5 < Age_Diff < -0.5", "1 < Age_Diff < -1", "-1 < Age_Diff < 1", "Removed Bad Leverage(s)") -> conditions
+# c("No Conditions", "Over Half Year", "Over Full Year", "Within 1 Year", "Removed Bad Leverage(s)) -> translation for what the conditions mean above
+post_table_m1
+```
+
+## Model 2
+```{r}
+post_table_m2 <- matrix(nrow=4, ncol=5, byrow=TRUE,
+                       c(cor1_m2,cor2_m2,cor3_m2,cor4_m2,
+                         NA,
+                         cor5_m2,cor6_m2,cor7_m2,cor8_m2,
+                         NA,
+                         cor9_m2,cor10_m2,cor11_m2,cor12_m2,
+                         NA,
+                         cor13_m2, cor14_m2, cor15_m2, cor16_m2,
+                         NA))
+rownames(post_table_m2) <- c("post1 - post2", "post1 - post3", "post2 - post3",
+                            "All post-Measures")
+colnames(post_table_m2) <- c("No Conditions", "Over Half Year", 
+                                     "Over Full Year", "Within 1 Year",
+                            "Removed Bad Leverage(s)")
+
+# c("No Conditions","0.5 < Age_Diff < -0.5", "1 < Age_Diff < -1", "-1 < Age_Diff < 1", "Removed Bad Leverage(s)") -> conditions
+# c("No Conditions", "Over Half Year", "Over Full Year", "Within 1 Year", "Removed Bad Leverage(s)) -> translation for what the conditions mean above
+post_table_m2
+```
+
+## Model 3
+```{r}
+post_table_m3 <- matrix(nrow=4, ncol=5, byrow=TRUE,
+                       c(cor1_m3,cor2_m3,cor3_m3,cor4_m3,
+                         NA,
+                         cor5_m3,cor6_m3,cor7_m3,cor8_m3,
+                         NA,
+                         cor9_m3,cor10_m3,cor11_m3,cor12_m3,
+                         NA,
+                         cor13_m3, cor14_m3, cor15_m3, cor16_m3,
+                         every_post_cor_improved_m3))
+rownames(post_table_m3) <- c("post1 - post2", "post1 - post3", "post2 - post3",
+                            "All post-Measures")
+colnames(post_table_m3) <- c("No Conditions", "Over Half Year", 
+                                     "Over Full Year", "Within 1 Year",
+                            "Removed Bad Leverage(s)")
+
+# c("No Conditions","0.5 < Age_Diff < -0.5", "1 < Age_Diff < -1", "-1 < Age_Diff < 1", "Removed Bad Leverage(s)") -> conditions
+# c("No Conditions", "Over Half Year", "Over Full Year", "Within 1 Year", "Removed Bad Leverage(s)) -> translation for what the conditions mean above
+post_table_m3
+
+# Interestingly enough, for all of Model 3's "post-Measures" and its combinations, it was the only one with Bad Leverage Point.
+```
+
+
+
+
+
+
+
+# Accuracy for Each "post-Measures"
+## Set up for showing the comparisons for each Models
+```{r}
+# Model 1
+post1.2_MSE_m1 <- mean((post1.2_all_m1_m1$residuals)^2)
+post1.3_MSE_m1 <- mean((post1.3_all_m1_m1$residuals)^2)
+post2.3_MSE_m1 <- mean((post2.3_all_m1_m1$residuals)^2)
+post_every_MSE_m1 <- mean((every_all_post_m1_m1$residuals)^2)
+
+
+# Model 2
+post1.2_MSE_m2 <- mean((post1.2_all_m1_m2$residuals)^2)
+post1.3_MSE_m2 <- mean((post1.3_all_m1_m2$residuals)^2)
+post2.3_MSE_m2 <- mean((post2.3_all_m1_m2$residuals)^2)
+post_every_MSE_m2 <- mean((every_all_post_m1_m2$residuals)^2)
+
+
+# Model 3
+post1.2_MSE_m3 <- mean((post1.2_all_m1_m3$residuals)^2)
+post1.3_MSE_m3 <- mean((post1.3_all_m1_m3$residuals)^2)
+post2.3_MSE_m3 <- mean((post2.3_all_m1_m3$residuals)^2)
+post_every_MSE_m3 <- mean((every_all_post_m1_m3$residuals)^2)
+post_improved_every_MSE_m3 <- mean((every_improved_post_m1_m3$residuals)^2)
+
+
+# Show the differences amongst the Models for MSE (Numerically)
+post_MSE_m1 <- data.frame(Combination=c("post - post2", "post - post3",
+                                       "post2 - post3", "All post-Measures"),
+                         MSE=c(post1.2_MSE_m1, post1.3_MSE_m1,
+                               post2.3_MSE_m1, post_every_MSE_m1))
+
+post_MSE_m2 <- data.frame(Combination=c("post - post2", "post - post3",
+                                       "post2 - post3", "All post-Measures"),
+                         MSE=c(post1.2_MSE_m2, post1.3_MSE_m2,
+                               post2.3_MSE_m2, post_every_MSE_m2))
+
+post_MSE_m3 <- data.frame(Combination=c("post - post2", "post - post3",
+                                       "post2 - post3", "All post-Measures",
+                                       "Removed Bad Leverage(s) - All post"),
+                         MSE=c(post1.2_MSE_m3, post1.3_MSE_m3,
+                               post2.3_MSE_m3, post_every_MSE_m3,
+                               post_improved_every_MSE_m3))
+
+
+post_MSE_all <- data.frame(Combination=c("post - post2", "post - post3",
+                                       "post2 - post3", "All post-Measures",
+                                       "Removed Bad Leverage(s): All post"),
+                          `MSE Model 1`=c(post1.2_MSE_m1, post1.3_MSE_m1,
+                               post2.3_MSE_m1, post_every_MSE_m1, NA),
+                         `MSE Model 2`=c(post1.2_MSE_m2, post1.3_MSE_m2,
+                               post2.3_MSE_m2, post_every_MSE_m2, NA),
+                         `MSE Model 3`=c(post1.2_MSE_m3, post1.3_MSE_m3,
+                               post2.3_MSE_m3, post_every_MSE_m3,
+                               post_improved_every_MSE_m3))
+
+```
+
+## Show the comparisons for each Models (Numerical)
+```{r}
+post_MSE_m1
+post_MSE_m2
+post_MSE_m3
+post_MSE_all
+```
+
+
+
+# Accuracy & Reliability for All AI Models (both "pre" & "post")
+## Set up the data
+```{r}
+# Differences in Age between Actual Age and AI Model Predicted Age
+diff_m1 <- d$age_actual - d$ai_model_1
+diff_m2 <- d$age_actual - d$ai_model_2
+diff_m3 <- d$age_actual - d$ai_model_3
+
+# Accuracy (using R-Squared)
+all_r_m1 <- summary(lm(d$ai_model_1 ~ d$age_actual))$r.squared
+all_r_m2 <- summary(lm(d$ai_model_2 ~ d$age_actual))$r.squared
+all_r_m3 <- summary(lm(d$ai_model_3 ~ d$age_actual))$r.squared
+
+# Accuracy (using MSE)
+all_MSE_m1 <- mean((lm(d$age_actual ~ d$ai_model_1)$residuals)^2)
+all_MSE_m2 <- mean((lm(d$age_actual ~ d$ai_model_2)$residuals)^2)
+all_MSE_m3 <- mean((lm(d$age_actual ~ d$ai_model_3)$residuals)^2)
+
+# Reliability (using correlation)
+all_cor_m1 <- cor(d$age_actual, d$ai_model_1)
+all_cor_m2 <- cor(d$age_actual, d$ai_model_2)
+all_cor_m3 <- cor(d$age_actual, d$ai_model_3)
+
+# Combine all above for comparisons
+acc_reli_comparison_all_models <- 
+  data.frame(`Model Type`=c("AI Model 1", "AI Model 2", "AI Model 3"),
+             `Accuracy (using R-Squared)`=c(all_r_m1, all_r_m2, all_r_m3),
+             `Accuracy (using MSE)`=c(all_MSE_m1,all_MSE_m2, all_MSE_m3),
+             `Reliability (using correlation)`=c(all_cor_m1, all_cor_m2, 
+                                                 all_cor_m3))
+```
+
+## Show the comparisons for each Models (Numerical)
+```{r}
+acc_reli_comparison_all_models
+```
+
+
+
+
+
+
+
